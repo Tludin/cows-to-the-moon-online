@@ -1,0 +1,21 @@
+[
+  { "id": "nasa_import_top", "name": "Nasa Import Rocket Top", "type": "rocketPiece", "text": "Rocket piece: Nasa Import top.", "effect": null, "params": null, "pieceType": "nasa_import", "part": "top" },
+  { "id": "nasa_import_middle", "name": "Nasa Import Rocket Middle", "type": "rocketPiece", "text": "Rocket piece: Nasa Import middle.", "effect": null, "params": null, "pieceType": "nasa_import", "part": "middle" },
+  { "id": "nasa_import_bottom", "name": "Nasa Import Rocket Bottom", "type": "rocketPiece", "text": "Rocket piece: Nasa Import bottom.", "effect": null, "params": null, "pieceType": "nasa_import", "part": "bottom" },
+  { "id": "farmmade_top", "name": "Farmmade Rocket Top", "type": "rocketPiece", "text": "Rocket piece: Farmmade top.", "effect": null, "params": null, "pieceType": "farmmade", "part": "top" },
+  { "id": "farmmade_middle", "name": "Farmmade Rocket Middle", "type": "rocketPiece", "text": "Rocket piece: Farmmade middle.", "effect": null, "params": null, "pieceType": "farmmade", "part": "middle" },
+  { "id": "farmmade_bottom", "name": "Farmmade Rocket Bottom", "type": "rocketPiece", "text": "Rocket piece: Farmmade bottom.", "effect": null, "params": null, "pieceType": "farmmade", "part": "bottom" },
+  { "id": "heavily_improvised_top", "name": "Heavily Improvised Rocket Top", "type": "rocketPiece", "text": "Rocket piece: Heavily Improvised top.", "effect": null, "params": null, "pieceType": "heavily_improvised", "part": "top" },
+  { "id": "heavily_improvised_middle", "name": "Heavily Improvised Rocket Middle", "type": "rocketPiece", "text": "Rocket piece: Heavily Improvised middle.", "effect": null, "params": null, "pieceType": "heavily_improvised", "part": "middle" },
+  { "id": "heavily_improvised_bottom", "name": "Heavily Improvised Rocket Bottom", "type": "rocketPiece", "text": "Rocket piece: Heavily Improvised bottom.", "effect": null, "params": null, "pieceType": "heavily_improvised", "part": "bottom" },
+  { "id": "wild_card", "name": "Wild Card", "type": "rocketPiece", "text": "Counts as any rocket piece. Does not count toward the matching-set bonus.", "effect": null, "params": null, "pieceType": "wild", "part": "any" },
+  { "id": "space_cowboy", "name": "Space Cowboy", "type": "event", "text": "Move a cow from the moon to its owner's farm. Target any player with at least 1 cow on the moon, or no one.", "effect": "moveCowMoonToFarm", "params": null, "pieceType": null, "part": null },
+  { "id": "mini_rocket", "name": "Mini Rocket", "type": "event", "text": "Move a cow from a farm or rocket directly onto the moon.", "effect": "moveCowToMoon", "params": null, "pieceType": null, "part": null },
+  { "id": "cow_wrangler", "name": "Cow Wrangler", "type": "event", "text": "Return all cows in a player's rocket to that player's farm. Target any player with at least 1 cow in their rocket, or no one.", "effect": "returnRocketCowsToFarm", "params": null, "pieceType": null, "part": null },
+  { "id": "rocket_thief", "name": "Rocket Thief", "type": "event", "text": "Take any rocket piece in play into your hand.", "effect": "stealRocketPiece", "params": null, "pieceType": null, "part": null },
+  { "id": "bad_weather", "name": "Bad Weather", "type": "event", "text": "No rockets may launch until the start of your next turn.", "effect": "preventLaunches", "params": null, "pieceType": null, "part": null },
+  { "id": "wind", "name": "Wind", "type": "event", "text": "Trade hands with any other player.", "effect": "swapHands", "params": null, "pieceType": null, "part": null },
+  { "id": "super_speedy_cows", "name": "Super Speedy Cows", "type": "event", "text": "Move up to three cows from your farm into your rocket.", "effect": "moveCowsFarmToRocket", "params": { "count": 3 }, "pieceType": null, "part": null },
+  { "id": "cownter", "name": "Cownter", "type": "event", "text": "Free action (doesn't use an action). Cancels an event card in response to it being played. Cannot target Launch or rocket pieces.", "effect": "cancelEvent", "params": null, "pieceType": null, "part": null },
+  { "id": "launch", "name": "Launch", "type": "launch", "text": "Launches a completed rocket (with any cows aboard) to the moon. Not counterable.", "effect": null, "params": null, "pieceType": null, "part": null }
+]

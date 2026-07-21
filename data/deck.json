@@ -1,0 +1,21 @@
+[
+  { "cardId": "nasa_import_top", "count": 2 },
+  { "cardId": "nasa_import_middle", "count": 2 },
+  { "cardId": "nasa_import_bottom", "count": 2 },
+  { "cardId": "farmmade_top", "count": 2 },
+  { "cardId": "farmmade_middle", "count": 2 },
+  { "cardId": "farmmade_bottom", "count": 2 },
+  { "cardId": "heavily_improvised_top", "count": 2 },
+  { "cardId": "heavily_improvised_middle", "count": 2 },
+  { "cardId": "heavily_improvised_bottom", "count": 2 },
+  { "cardId": "wild_card", "count": 2 },
+  { "cardId": "space_cowboy", "count": 2 },
+  { "cardId": "mini_rocket", "count": 2 },
+  { "cardId": "cow_wrangler", "count": 2 },
+  { "cardId": "rocket_thief", "count": 1 },
+  { "cardId": "bad_weather", "count": 1 },
+  { "cardId": "wind", "count": 2 },
+  { "cardId": "super_speedy_cows", "count": 6 },
+  { "cardId": "cownter", "count": 4 },
+  { "cardId": "launch", "count": 4 }
+]

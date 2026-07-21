@@ -1,0 +1,20 @@
+{
+  "minPlayers": 2,
+  "maxPlayers": 4,
+  "startingHandSize": 5,
+  "emptyHandDrawCount": 5,
+  "drawsPerTurn": 2,
+  "actionsPerTurn": 3,
+  "rocketStoreSize": 4,
+  "startingCowsPerPlayer": 10,
+  "rocketBaseCapacity": 4,
+  "rocketMatchingSetBonusCows": 1,
+  "cownterResponseTimeoutSeconds": 30,
+  "turnInactivityTimeoutSeconds": 90,
+  "playerInactivityTurnLimit": 2,
+  "roomInactivityWarningMinutes": 5,
+  "roomInactivityGraceMinutes": 1,
+  "roomCleanupMinutes": 30,
+  "roomCodeLength": 5,
+  "logTailLength": 20
+}

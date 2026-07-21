@@ -1,0 +1,16 @@
+{
+  "name": "cows-to-the-moon-online",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Phase 1: standalone game engine for Cows To The Moon Online",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --test --test-force-exit test/*.test.ts",
+    "start": "node --experimental-strip-types server/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

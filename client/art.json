@@ -1,0 +1,28 @@
+{
+  "cards": {
+    "nasa_import_top": "art/NASA_Impt_Rocket_Top.png",
+    "nasa_import_middle": "art/NASA_Impt_Rocket_Middle.png",
+    "nasa_import_bottom": "art/NASA_Impt_Rocket_Bottom.png",
+    "farmmade_top": "art/Farmmade_Rocket_Top.png",
+    "farmmade_middle": "art/Farmmade_Rocket_Middle_1.png",
+    "farmmade_bottom": "art/Farmmade_Rocket_Bottom.png",
+    "heavily_improvised_top": "art/Heavily_Improvised_Rocket_Top.png",
+    "heavily_improvised_middle": "art/H_Improvised_Rocket_Middle.png",
+    "heavily_improvised_bottom": "art/H_Improvised_Rocket_Bottom.png",
+    "wild_card": "art/Wild_Card.png",
+    "space_cowboy": "art/Space_Cowboy.png",
+    "mini_rocket": "art/Mini_Rocket.png",
+    "cow_wrangler": "art/Cow_Wrangler.png",
+    "rocket_thief": "art/Rocket_Thief.png",
+    "bad_weather": "art/Bad_Weather.png",
+    "wind": "art/Wind.png",
+    "super_speedy_cows": "art/Super_Speedy_Cows.png",
+    "cownter": "art/Counter.png",
+    "launch": "art/Launch.png"
+  },
+  "board": {
+    "back": "art/Back.png",
+    "moon": "art/Moon.png",
+    "farm": "art/Farm.png"
+  }
+}
