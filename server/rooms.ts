@@ -456,13 +456,15 @@ export class RoomManager {
   private onActionTimeout(room: Room): void {
     if (!this.rooms.has(room.code) || room.status !== 'playing' || !room.state) return;
     const s = room.state;
-    // Same branch that picks the action picks the counter: auto-pass/auto-skip
-    // rates are a proxy for players dropping or stalling mid-game.
-    metrics.inc(s.pending ? 'cownter_auto_pass_total' : 'turn_auto_skip_total');
+    const wasPending = s.pending !== null && s.pending !== undefined;
     const action: Action = s.pending
       ? { type: 'respond', playerId: s.pending.toRespond[0]!, response: 'pass' }
       : { type: 'skipTurn', playerId: s.turn.currentPlayerId };
-    this.applyRoomAction(room, action); // re-arms the timer itself
+    const error = this.applyRoomAction(room, action); // re-arms the timer itself
+    // Count OUTCOMES, not intents: only increment if the engine accepted the
+    // timeout action. Auto-pass/auto-skip rates are a proxy for players
+    // dropping or stalling mid-game.
+    if (!error) metrics.inc(wasPending ? 'cownter_auto_pass_total' : 'turn_auto_skip_total');
   }
 
   /**

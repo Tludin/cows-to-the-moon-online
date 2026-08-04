@@ -136,6 +136,35 @@ for live paths:
 - Room codes: config-driven length, unambiguous alphabet, collision-checked
   (spec 7.4). ✓
 
+## Observability review 2026-08-04 (metrics/log layer, pre-deploy pass)
+
+Scope: `server/metrics.ts`, `server/log.ts` (both new), and their wiring into
+`rooms.ts` / `server.ts` / `ws.ts`, reviewed for layering, redundancy, and
+future bugs before the first Linode deploy. Verdict: **clean, one fix made.**
+
+- **Layering holds.** Both new modules are leaf modules (zero imports from the
+  project), so `ws.ts` importing them creates no cycles and `src/` is
+  untouched. No hidden game info (hands, deck order) reaches logs or metrics.
+- **Fixed: count outcomes, not intents.** `onActionTimeout` previously
+  incremented `turn_auto_skip_total` / `cownter_auto_pass_total` BEFORE
+  `applyRoomAction`; it now increments only when the engine accepts the
+  action, so a future engine change that rejects a timeout-fired action can't
+  silently inflate the counter.
+- **Known quirk (documented, not a bug):** `rooms_created_total` is NOT equal
+  to `rooms_ended_total + rooms_cleaned_total`. Lobby rooms whose last player
+  leaves are deleted uncounted, and abandoned playing rooms are cleaned
+  without ever being "ended". Use the counters as rates, not as an identity.
+- **Gauge closures pin their RoomManager.** The registry holds
+  `() => this.rooms.size`; a disposed manager stays referenced (last
+  registration wins). Irrelevant in production (one manager per process),
+  visible only in tests — which assert deltas for exactly this reason.
+- **Transport-swap note:** replacing `ws.ts` with Socket.IO would silently
+  drop `ws_frame_errors_total` and the `ws_frame_error` log — re-wire
+  equivalents in the replacement.
+- **Deploy note:** Caddy proxies everything, so `/metrics` and `/health` are
+  public on the game subdomain. Contents are low-sensitivity (counts only);
+  restrict the two paths in the Caddyfile if that ever changes.
+
 ## Bottom line
 
 Nothing needs fixing to keep building. The client cleanups above are done; the
