@@ -54,7 +54,9 @@ server/          Phase 2: networking (knows nothing about game rules)
   ws.ts          Zero-dependency RFC 6455 WebSocket implementation
   views.ts       Per-player scoped state views — hidden hands (spec 7.3)
   rooms.ts       Room manager: join codes, lobby, spec 7.1/7.2 protocol
-  server.ts      HTTP static files + WS upgrade on one port
+  server.ts      HTTP static files + WS upgrade on one port; /health + /metrics
+  metrics.ts     In-memory counters/gauges, Prometheus text export (zero deps)
+  log.ts         Structured JSON logging, one JSON document per line
 client/          Phase 2 store + Phase 4/5 tabletop UI (React via CDN, no build)
   index.html     loads Google Fonts + styles.css
   app.js         Single store fed by server messages (spec 3.3) + all UI,
@@ -62,9 +64,10 @@ client/          Phase 2 store + Phase 4/5 tabletop UI (React via CDN, no build)
   styles.css     muted-felt three-column tabletop theme
   art.json       Phase 5: cardId→asset + board.{back,moon,farm} (spec 4.2)
   art/           Phase 5: the served card + board PNGs
-test/            97 tests: engine suites, Example of Play run literally,
+test/            106 tests: engine suites, Example of Play run literally,
                  bot-vs-bot simulations, full games over real WebSockets,
-                 and Phase 3 reconnect/timer/AFK/room-lifecycle coverage
+                 Phase 3 reconnect/timer/AFK/room-lifecycle coverage, and
+                 observability (metrics registry, /health, /metrics, counters)
 ```
 
 ## Running the tests

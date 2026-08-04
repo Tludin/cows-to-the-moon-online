@@ -7,6 +7,8 @@ import { extname, join, normalize, sep } from 'node:path';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { acceptUpgrade } from './ws.ts';
+import { log } from './log.ts';
+import * as metrics from './metrics.ts';
 import { RoomManager } from './rooms.ts';
 import type { GameConfig } from '../src/index.ts';
 
@@ -39,8 +41,23 @@ export function startServer(
     // Static files only — all gameplay traffic is WebSocket (spec 3.1).
     const url = (req.url ?? '/').split('?')[0]!;
     if (url === '/health') {
+      // Rich enough for a load-balancer target check or uptime monitor to
+      // reason about ("up and not obviously wedged"), still dependency-free.
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end('{"ok":true}');
+      res.end(
+        JSON.stringify({
+          ok: true,
+          uptimeSeconds: Math.round(process.uptime()),
+          rooms: rooms.getRoomCount(),
+          memoryRssMb: Math.round(process.memoryUsage().rss / 1e6),
+        }),
+      );
+      return;
+    }
+    if (url === '/metrics') {
+      // Prometheus text format — scrapeable by Prometheus / CloudWatch agent.
+      res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4; charset=utf-8' });
+      res.end(metrics.toPrometheus());
       return;
     }
     const rel = url === '/' ? 'index.html' : url.slice(1);
@@ -68,7 +85,11 @@ export function startServer(
 
   server.on('upgrade', (req, socket) => {
     const conn = acceptUpgrade(req, socket);
-    if (conn) rooms.handleConnection(conn);
+    if (conn) {
+      rooms.handleConnection(conn);
+    } else {
+      metrics.inc('ws_handshake_failures_total');
+    }
   });
 
   return new Promise((resolve) => {
@@ -93,5 +114,5 @@ export function startServer(
 // Run directly: `node --experimental-strip-types server/server.ts`
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const { port } = await startServer();
-  console.log(`Cows To The Moon server running at http://localhost:${port}`);
+  log.info('server_started', { port, url: `http://localhost:${port}` });
 }

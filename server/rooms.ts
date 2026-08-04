@@ -5,6 +5,8 @@
 
 import { randomBytes, randomUUID } from 'node:crypto';
 import { applyAction, createGame, defaultConfig } from '../src/index.ts';
+import { log } from './log.ts';
+import * as metrics from './metrics.ts';
 import { scopedView } from './views.ts';
 import type { Action, GameConfig, GameState } from '../src/index.ts';
 
@@ -70,6 +72,19 @@ export class RoomManager {
     this.config = { ...defaultConfig, ...configOverride };
     this.sweeper = setInterval(() => this.sweep(), 60_000);
     this.sweeper.unref?.();
+    // Gauges are callbacks: evaluated fresh at scrape time, not stored values.
+    metrics.gauge('rooms_active', () => this.rooms.size);
+    metrics.gauge('players_connected', () =>
+      [...this.rooms.values()].reduce(
+        (n, r) => n + r.players.filter((p) => p.socket !== null).length,
+        0,
+      ),
+    );
+  }
+
+  /** Live room count — read by the /health endpoint (observation only). */
+  getRoomCount(): number {
+    return this.rooms.size;
   }
 
   /** Stops all timers so the process (or a test) can exit cleanly. */
@@ -80,9 +95,13 @@ export class RoomManager {
 
   /** Wire up a fresh connection. */
   handleConnection(socket: ClientSocket): void {
+    metrics.inc('ws_connections_opened_total');
     const ctx: ClientCtx = { socket, roomCode: null, playerId: null };
     socket.on('message', (text) => this.onMessage(ctx, text));
-    socket.on('close', () => this.onDisconnect(ctx));
+    socket.on('close', () => {
+      metrics.inc('ws_connections_closed_total');
+      this.onDisconnect(ctx);
+    });
   }
 
   getRoom(code: string): Room | undefined {
@@ -134,6 +153,13 @@ export class RoomManager {
       const room = ctx.roomCode ? this.rooms.get(ctx.roomCode) : undefined;
       if (room) this.onActivity(room);
     } catch (e) {
+      metrics.inc('server_errors_total');
+      log.error('message_handler_error', {
+        roomCode: ctx.roomCode,
+        playerId: ctx.playerId,
+        msgType: type,
+        error: e instanceof Error ? e.message : String(e),
+      });
       this.sendError(ctx, 'serverError', e instanceof Error ? e.message : 'Internal error');
     }
   }
@@ -175,6 +201,7 @@ export class RoomManager {
       emptySince: null,
     };
     this.rooms.set(code, room);
+    metrics.inc('rooms_created_total');
     ctx.roomCode = code;
     ctx.playerId = player.id;
 
@@ -394,6 +421,7 @@ export class RoomManager {
     if (room.state.status === 'ended') {
       room.status = 'ended';
       room.endedAt = Date.now();
+      metrics.inc('rooms_ended_total');
       this.clearTimers(room);
       this.broadcast(room, { type: 'gameOver', winnerId: room.state.winnerId });
     }
@@ -428,6 +456,9 @@ export class RoomManager {
   private onActionTimeout(room: Room): void {
     if (!this.rooms.has(room.code) || room.status !== 'playing' || !room.state) return;
     const s = room.state;
+    // Same branch that picks the action picks the counter: auto-pass/auto-skip
+    // rates are a proxy for players dropping or stalling mid-game.
+    metrics.inc(s.pending ? 'cownter_auto_pass_total' : 'turn_auto_skip_total');
     const action: Action = s.pending
       ? { type: 'respond', playerId: s.pending.toRespond[0]!, response: 'pass' }
       : { type: 'skipTurn', playerId: s.turn.currentPlayerId };
@@ -470,6 +501,8 @@ export class RoomManager {
     if (!this.rooms.has(room.code) || room.status !== 'playing') return;
     room.status = 'ended';
     room.endedAt = Date.now();
+    metrics.inc('rooms_ended_total');
+    log.info('room_timed_out', { roomCode: room.code });
     this.clearTimers(room);
     this.broadcast(room, { type: 'roomTimedOut' });
   }
@@ -483,7 +516,10 @@ export class RoomManager {
       const stale =
         (room.endedAt !== null && now - room.endedAt >= maxAge) ||
         (room.emptySince !== null && now - room.emptySince >= maxAge);
-      if (stale) this.destroyRoom(room);
+      if (stale) {
+        metrics.inc('rooms_cleaned_total');
+        this.destroyRoom(room);
+      }
     }
   }
 

@@ -13,6 +13,8 @@ import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
+import { log } from './log.ts';
+import * as metrics from './metrics.ts';
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 /** Refuse messages larger than this (a full game state is ~10 KB). */
@@ -70,6 +72,10 @@ export class WsConnection extends EventEmitter {
   }
 
   private fail(): void {
+    // Protocol violation (unmasked frame, oversized payload, bad opcode…):
+    // previously silent — now counted and logged so a spike is visible.
+    metrics.inc('ws_frame_errors_total');
+    log.warn('ws_frame_error', {});
     this.socket.destroy();
     this.emitClose();
   }
