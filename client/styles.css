@@ -62,26 +62,26 @@
   --star: rgba(255, 255, 255, 0.85);
   --star-dim: rgba(255, 255, 255, 0.4);
 
-  /* Scene geometry. The disc is deliberately big: every player's section
-     lives on this one surface, so it has to hold N seats plus the centre
-     cluster without crowding.
+  /* Scene geometry. Every player's section lives on this one surface, so the
+     disc has to hold N seats plus the centre cluster with real clearance.
 
-     Because each mat is COUNTER-ROTATED to stay upright (see .seat-inner),
-     it stays axis-aligned in table space instead of lying along the radius.
-     That makes its CORNERS, not its near edge, the binding constraint — the
-     mat sweeps a circle of radius  seat-radius + half-diagonal.  Two rules,
-     both of which must hold or the layout breaks visibly:
+     Mats lie ALONG THE RADIUS (they face the outside edge of the table, like
+     real place mats), so the mat's height runs radially and its width runs
+     tangentially. Two rules, both of which must hold or sections collide:
 
-       inner:  seat-radius - mat-height/2  >  cluster reach     (no overlap)
-       outer:  seat-radius + mat-half-diag <  disc-radius       (stays on felt)
+       inner:  seat-radius - mat-height/2   >  cluster reach   (no overlap)
+       outer:  sqrt((seat-radius + mat-height/2)^2 + (mat-width/2)^2)
+                                            <  disc-radius     (stays on felt)
 
-     Cluster reach = store(134) + gap(16) + piles(134) + gap(16) + moon/2(90)
-                   = 390px.
-     Mat is 472 x 300 -> half-diag = sqrt(236^2 + 150^2) = 280px.
-       inner: 550 - 150 = 400 > 390  OK
-       outer: 550 + 280 = 830 < 880  OK  */
-  --disc-radius: 880px;
-  --seat-radius: 550px;
+     Centre cluster is deck | moon | discard in a row with the store above, so
+     its reach from the moon's centre is:
+       north = row/2(90) + gap(16) + store(134) + its caption(16) = 256px
+       east/west = moon/2(90) + gap(14) + pile(96) = 200px
+     Mat is 472 x 300.
+       inner: 560 - 150 = 410 > 256          OK, 154px of clearance
+       outer: sqrt(710^2 + 236^2) = 748 < 900 OK, 152px of felt margin */
+  --disc-radius: 900px;
+  --seat-radius: 560px;
   --moon-size: 180px;
   --camera-pitch-default: 48deg; /* medium tilt: sitting at the table */
   --camera-dist: 1500px;
@@ -485,7 +485,11 @@ input:focus {
   width: 0;
   height: 0;
   transform-style: preserve-3d;
-  transform: translateZ(var(--camera-z, 0px)) rotateX(var(--camera-pitch, var(--camera-pitch-default)));
+  /* --focus-lift is a SCREEN-space nudge (it precedes the 3D rotation, so it
+     is not affected by the tilt); app.js ramps it in with the zoom focus to
+     keep the play area centred rather than low in frame. */
+  transform: translateY(var(--focus-lift, 0px)) translateZ(var(--camera-z, 0px))
+    rotateX(var(--camera-pitch, var(--camera-pitch-default)));
   transition: transform var(--camera-ease-ms, 0ms) ease-out;
 }
 /* The table itself. rotate() = the lazy-susan spin (see the note above). */
@@ -497,7 +501,13 @@ input:focus {
   height: calc(var(--disc-radius) * 2);
   margin: calc(var(--disc-radius) * -1) 0 0 calc(var(--disc-radius) * -1);
   border-radius: 50%;
-  transform: rotate(var(--table-spin, 0deg));
+  /* rotate = the lazy-susan spin. The translate after it shifts the whole
+     table so the FOCUS POINT — the play area at the near edge — sits under
+     the camera instead of the table's centre; app.js ramps it in as you zoom
+     past the default, so zooming closes in on the play area, not the moon.
+     Order matters: `rotate() translate()` translates in the table's own
+     unrotated frame, which is why app.js can pass a plain table-space point. */
+  transform: rotate(var(--table-spin, 0deg)) translate(var(--focus-x, 0px), var(--focus-y, 0px));
   transition: transform var(--camera-ease-ms, 0ms) ease-out;
   cursor: grab;
   touch-action: none;
@@ -525,7 +535,9 @@ input:focus {
    the MOON'S centre (not the column's) lands on that anchor. Rotating the
    anchor therefore pivots the whole cluster about the moon, which keeps the
    moon dead centre while the piles stay upright and readable as the table
-   turns — matching how the player mats behave (see .seat-inner). */
+   turns. The player mats deliberately do NOT do this (see .seat-inner) — a
+   mat belongs to one player and faces their edge, whereas the deck, discard
+   and store are shared by everyone, so they stay legible from every seat. */
 .table-hub {
   position: absolute;
   top: 50%;
@@ -544,7 +556,17 @@ input:focus {
   flex-direction: column;
   align-items: center;
   gap: 16px;
+  /* The moon is the tallest thing in .hub-row and is centred in it, and the
+     row is the column's last child — so "up by the column's height, back down
+     by half a moon" lands the MOON'S centre exactly on the table's centre. */
   transform: translate(-50%, calc(-100% + var(--moon-size) / 2));
+}
+/* deck and discard sit either side of the moon; the store row goes above. */
+.hub-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
 }
 /* One per player, laid flat on the surface, fanned evenly around the table.
    transform-origin 0 0 keeps the element's corner pinned to the table centre
@@ -561,15 +583,11 @@ input:focus {
   transform-origin: 0 0;
   transform: rotate(var(--seat-angle, 0deg)) translateY(var(--seat-radius)) translate(-50%, -50%);
 }
-/* The mat lies flat on the felt, but is counter-rotated by its own seat angle
-   AND the table's current spin, so its net on-screen rotation is always zero:
-   every player's section stays right-way-up no matter where it sits or how far
-   the table has been turned. Without this, the far seats read upside-down —
-   true of a real table, but unreadable on a screen. The mats therefore swivel
-   in place as the table turns, like labels that always face you. */
+/* No counter-rotation: the mat inherits its seat's angle, so it always faces
+   the OUTSIDE EDGE of the table — right-way-up for the player sitting there,
+   like a real place mat. Turning the table brings a mat round to the near
+   edge, where it reads upright for you. */
 .seat-inner {
-  transform: rotate(calc(-1 * (var(--seat-angle, 0deg) + var(--table-spin, 0deg))));
-  transition: transform var(--camera-ease-ms, 0ms) ease-out;
   display: flex;
   align-items: center;
   justify-content: center;

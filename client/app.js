@@ -399,6 +399,19 @@ const ZOOM_MAX = 1.6;
 const ZOOM_STEP = 0.12;
 const ZOOM_DEFAULT = 0.5; // frames the whole table at a typical window size
 const CAMERA_DIST = 1500; // px; must equal --camera-dist in styles.css
+const SEAT_RADIUS = 560; // px; must equal --seat-radius in styles.css
+// Zooming in closes in on the PLAY AREA at the near edge rather than the
+// middle of the table: past the default zoom, the table is progressively
+// shifted so the near seat sits under the camera instead of the moon.
+// 0 at the default zoom (whole table framed) -> 1 at full zoom.
+const FOCUS_AT_FULL_ZOOM = 0.92; // fraction of the way out to the seat centre
+// The near seat is closer to the camera than the table's centre, so even once
+// it IS the focus point it still projects below the middle of the frame (the
+// perspective origin sits above centre). This lifts the whole scene in SCREEN
+// space to compensate, ramped in alongside the focus. Expressed as a fraction
+// of the viewport's height so it holds at any window size.
+const FOCUS_LIFT_FRACTION = 0.13;
+const focusAmount = (zoom) => clamp((zoom - ZOOM_DEFAULT) / (ZOOM_MAX - ZOOM_DEFAULT), 0, 1);
 
 const wrapDeg = (d) => ((d % 360) + 360) % 360;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -1020,6 +1033,17 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
   // A trackpad pinch reaches the browser as a wheel event, so one path covers
   // both. Passive listeners can't preventDefault, hence the explicit effect.
   const viewportRef = useRef(null);
+  // Track the viewport's height so the focus lift above stays proportional.
+  const [viewH, setViewH] = useState(0);
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const update = () => setViewH(el.clientHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
@@ -1034,6 +1058,20 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
   const nudgeSpin = (d) => easedSetCam((c) => ({ ...c, spin: wrapDeg(c.spin + d) }), 220);
   // "Face me": spin your own seat (angle 0) back to the near edge.
   const faceMe = () => easedSetCam((c) => ({ ...c, spin: 0, pitch: CAMERA_PITCH_DEFAULT }), 420);
+
+  // Focus point for the zoom, in the table's own (unrotated) coordinates.
+  // The seat currently at the near edge is the one whose angle is -spin, and a
+  // seat at angle a sits at (-R sin a, R cos a) — so the near seat is at
+  // (R sin spin, R cos spin). The CSS applies this as `rotate() translate()`,
+  // i.e. in the table's unrotated frame, so no extra conversion is needed.
+  // Negated because we shift the TABLE to bring that point under the camera.
+  const focusT = focusAmount(cam.zoom) * FOCUS_AT_FULL_ZOOM;
+  const spinRad = (cam.spin * Math.PI) / 180;
+  const focus = {
+    x: -focusT * SEAT_RADIUS * Math.sin(spinRad),
+    y: -focusT * SEAT_RADIUS * Math.cos(spinRad),
+  };
+  const focusLift = -focusT * FOCUS_LIFT_FRACTION * viewH;
 
   const myDrawPhase = myTurn && !g.pending && g.turn.phase === 'draw';
   const emptyHand = (you?.hand?.length ?? 0) === 0;
@@ -1066,6 +1104,7 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
         style=${{
           '--camera-pitch': `${cam.pitch}deg`,
           '--camera-z': `${zoomToZ(cam.zoom)}px`,
+          '--focus-lift': `${focusLift}px`,
           '--camera-ease-ms': `${easeMs}ms`,
         }}
       >
@@ -1073,7 +1112,7 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
           className=${`table-disc ${spinning ? 'is-spinning' : ''}`}
           ref=${discRef}
           onPointerDown=${onDiscPointerDown}
-          style=${{ '--table-spin': `${cam.spin}deg` }}
+          style=${{ '--table-spin': `${cam.spin}deg`, '--focus-x': `${focus.x}px`, '--focus-y': `${focus.y}px` }}
         >
           <!-- centre of the table: the moon, with the shared piles beside it -->
           <div className="table-hub">
@@ -1098,7 +1137,7 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
               </div>
               <span className="pile-cap">Rocket store</span>
             </div>
-            <div className="piles">
+            <div className="hub-row">
               <button
                 className=${`pile deck-pile ${myDrawPhase && !deckDisabled ? 'drawable' : ''}`}
                 disabled=${deckDisabled}
@@ -1109,6 +1148,7 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
                 </span>
                 <span className="pile-cap">Deck · ${g.deckCount}</span>
               </button>
+              <${MoonDisc} g=${g} />
               <div className="pile discard-pile">
                 <span className="pile-visual">
                   ${topDiscard
@@ -1123,7 +1163,6 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
                 <span className="pile-cap">Discard · ${g.discard.length}</span>
               </div>
             </div>
-            <${MoonDisc} g=${g} />
             </div>
           </div>
 
