@@ -404,7 +404,9 @@ function App() {
 function MenuTable() {
   return html`<div className="menu-table-viewport" aria-hidden="true">
     <div className="table-camera">
-      <div className="table-disc"></div>
+      <div className="table-disc">
+        <div className="table-surface"></div>
+      </div>
     </div>
   </div>`;
 }
@@ -507,11 +509,27 @@ const CAMERA_ZOOM_MAX = 1.6;
 const CAMERA_ZOOM_STEP = 0.15; // per wheel notch / button press
 const CAMERA_ROTATE_SENSITIVITY = 0.35; // deg of yaw per px of drag delta
 const CAMERA_YAW_STEP = 6; // deg per arrow-key press
-const CAMERA_BASE_DISTANCE = 1600; // px; --camera-z = -BASE / zoom
+const CAMERA_BASE_DISTANCE = 2700; // px; --camera-z = -BASE / zoom (scaled up with --disc-radius, styles.css)
 const PIECE_SNAP_RADIUS_PX = 28; // local px; matches --piece-snap-radius-px (v2 §1.6)
 
 const wrapYaw = (deg) => ((deg % 360) + 360) % 360;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+// Follow-up fix (2026-08): seats no longer wrap the table's full 360°, which
+// used to put roughly half the players on the disc's far side — a vertical
+// standing panel rotated to face the center reads as upside-down/backwards
+// from there, i.e. "on the opposite face" of the table. All seats now sit
+// within one arc of the near face instead, fanned out either side of your
+// own seat (always index 0 in `seated`, kept at yaw 0 / dead centre); the
+// camera still orbits freely to bring any seat to the front, same as before.
+const SEAT_ARC_DEGREES = 150; // degrees spread across the far side of the fan
+function seatAngleFor(idx, n) {
+  if (idx === 0 || n <= 1) return 0;
+  const side = idx % 2 === 1 ? 1 : -1; // alternate right/left of your own seat
+  const rank = Math.ceil(idx / 2); // 1st, 2nd... seat out from centre on that side
+  const step = SEAT_ARC_DEGREES / n;
+  return side * rank * step;
+}
 
 function Game({ state, deadline }) {
   // Hooks first (before any early return) so hook order is stable.
@@ -1349,7 +1367,7 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick, camera, setCam
     };
     const idx = seated.findIndex(legal);
     if (idx < 0) return;
-    const seatAngle = (360 / n) * idx;
+    const seatAngle = seatAngleFor(idx, n);
     const needed = wrapYaw(-seatAngle);
     const delta = Math.min(wrapYaw(needed - camera.yaw), wrapYaw(camera.yaw - needed));
     if (delta < 1) return; // already on screen — no unnecessary camera move
@@ -1402,6 +1420,9 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick, camera, setCam
         }}
       >
         <div className="table-disc" ref=${discRef} onPointerDown=${onDiscPointerDown}>
+          <!-- felt/wood visual surface only — see the CSS rule for why this
+               is a separate element from .table-disc itself (spin-axis fix). -->
+          <div className="table-surface"></div>
 
           <!-- centre hub: moon, deck/discard, rocket store — shared by all seats -->
           <div className="table-hub">
@@ -1454,11 +1475,11 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick, camera, setCam
             </div>
           </div>
 
-          <!-- one seat per player, positioned radially — seatAngle for seat i
-               of n: (360/n)*i, with the players list rotated above so your own
-               seat is always i=0 (yaw 0). -->
+          <!-- one seat per player, fanned across one arc of the near face
+               (seatAngleFor), with the players list rotated above so your own
+               seat is always i=0 (yaw 0, dead centre). -->
           ${seated.map((p, i) => {
-            const seatAngle = (360 / n) * i;
+            const seatAngle = seatAngleFor(i, n);
             const isSelf = p.id === g.you;
             const canHerd =
               isSelf && myActionPhase && p.farm > 0 && p.rocket.pieces.length > 0 && p.rocket.cows < p.rocket.capacity;
