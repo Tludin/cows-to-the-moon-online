@@ -279,95 +279,6 @@ function cardKind(card) {
   return 'event';
 }
 
-// ------------------------------------------------- card flight animation ---
-// FLIP-style draw/play animation, native Web Animations API only (v2 §1.5).
-// Source/destination DOM elements register themselves here via ref
-// callbacks — plain bookkeeping outside React state, since it never needs to
-// trigger a render. The actual draw/play is already authoritative by the
-// time any of this runs; this is a purely cosmetic client-side overlay.
-const flightEls = { deck: null, discard: null, store: new Map(), hand: new Map() };
-const regFlightEl = (bucket, key) => (el) => {
-  if (bucket === 'deck' || bucket === 'discard') {
-    flightEls[bucket] = el || null;
-  } else if (el) {
-    flightEls[bucket].set(key, el);
-  } else {
-    flightEls[bucket].delete(key);
-  }
-};
-// Queued flights: captured at the moment the player acts (so the ghost's
-// starting look/position is right), consumed once the resulting state change
-// actually lands in the next render.
-let pendingDraws = []; // FIFO of { rect, clone } — one per individual draw pick
-const pendingPlays = new Map(); // cardInstanceId -> { rect, clone }
-
-function snapshotEl(el) {
-  if (!el) return null;
-  return { rect: el.getBoundingClientRect(), clone: el.cloneNode(true) };
-}
-/** Called from Table right before sending a drawCards pick. */
-function queueDrawFlight(pick) {
-  const src = pick?.source === 'rocketStore' ? flightEls.store.get(pick.instanceId) : flightEls.deck;
-  const snap = snapshotEl(src);
-  if (snap) pendingDraws.push(snap);
-}
-/** Called from Hand right before a drag-release or click sends a play. */
-function queuePlayFlight(cardInstanceId) {
-  const snap = snapshotEl(flightEls.hand.get(cardInstanceId));
-  if (snap) pendingPlays.set(cardInstanceId, snap);
-}
-
-const prefersReducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-
-/**
- * Animate a snapshot clone from its captured position to `destEl`'s current
- * position, then remove it. `onSettled` fires when the flight is over (used
- * to un-hide the real element it stood in for). Reduced motion drops the
- * arc/translate for a short opacity crossfade instead (§8).
- */
-function flyGhost(snap, destEl, { rotateEnd = 0, duration = 350 } = {}, onSettled) {
-  if (!snap || !destEl) {
-    onSettled?.();
-    return;
-  }
-  const destRect = destEl.getBoundingClientRect();
-  const ghost = snap.clone;
-  ghost.className = `flight-ghost ${ghost.className || ''}`;
-  // getBoundingClientRect already reflects whatever transform/margin the
-  // source had at capture time (e.g. an in-progress drag offset, the hand
-  // rail's overlapping negative margin) — reset both on the clone so the
-  // animation's own transform is the only one in play, not stacked on top.
-  ghost.style.transform = 'none';
-  ghost.style.margin = '0';
-  ghost.style.position = 'fixed';
-  ghost.style.left = `${snap.rect.left}px`;
-  ghost.style.top = `${snap.rect.top}px`;
-  ghost.style.width = `${snap.rect.width}px`;
-  ghost.style.height = `${snap.rect.height}px`;
-  document.body.appendChild(ghost);
-
-  const dx = destRect.left - snap.rect.left;
-  const dy = destRect.top - snap.rect.top;
-  const reduced = prefersReducedMotion();
-  const keyframes = reduced
-    ? [{ opacity: 1 }, { opacity: 0 }]
-    : [
-        { transform: 'translate(0,0) scale(1) rotate(0deg)' },
-        { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - 40}px) scale(1.06) rotate(0deg)`, offset: 0.5 },
-        { transform: `translate(${dx}px, ${dy}px) scale(1) rotate(${rotateEnd}deg)` },
-      ];
-  const anim = ghost.animate(keyframes, {
-    duration: reduced ? 120 : duration,
-    easing: reduced ? 'ease' : 'cubic-bezier(0.33, 0, 0.2, 1)',
-  });
-  const finish = () => {
-    ghost.remove();
-    onSettled?.();
-  };
-  anim.onfinish = finish;
-  anim.oncancel = finish;
-}
-
 function App() {
   const [state, dispatch] = useReducer(reducer, initial);
   useEffect(() => {
@@ -387,27 +298,9 @@ function App() {
       <b>Anyone there? The game times out in ${state.inactivityWarning.graceSeconds}s of inactivity.</b>
       <button onClick=${() => send({ type: 'keepAlive' })}>We're still here!</button>
     </p>`}
-    ${(state.screen === 'home' || state.screen === 'lobby') && html`<${MenuTable} />`}
     ${state.screen === 'home' && html`<${Home} connected=${state.connected} />`}
     ${state.screen === 'lobby' && html`<${Lobby} state=${state} />`}
     ${state.screen === 'game' && html`<${Game} state=${state} deadline=${state.deadline} />`}
-  </div>`;
-}
-
-/**
- * The menu's idling table-in-space backdrop (v2 §1.4): the same starfield
- * (already on body) + a simplified, empty table disc that spins slowly and
- * passively behind the screen-anchored home/lobby panel. Purely decorative —
- * a plain CSS @keyframes loop, not JS-driven camera state — and not
- * interactive: dragging the visible table on the menu does nothing.
- */
-function MenuTable() {
-  return html`<div className="menu-table-viewport" aria-hidden="true">
-    <div className="table-camera">
-      <div className="table-disc">
-        <div className="table-surface"></div>
-      </div>
-    </div>
   </div>`;
 }
 
@@ -486,50 +379,32 @@ function Countdown({ deadline, g }) {
   return html`<span className="countdown">${nameOf(g, deadline.playerId)} ${what} in ${secs}s</span>`;
 }
 
-/** Cards that pick a whole player via a popup. Empty as of the redesign
- *  (v2 §1.3 converts the last three to zone-clicks below) — kept as the
- *  documented extension point for any future card that genuinely needs a
- *  player-list popup rather than an on-table zone. */
-const POPUP_EFFECTS = [];
-/** Cards that pick a specific spot by clicking a highlighted zone on the
- *  table. Wind/Cow Wrangler/Space Cowboy join Mini Rocket/Rocket Thief here
- *  per v2 §1.3 — Cownter response is the only interaction left that still
- *  opens a blocking popup. */
-const ZONE_EFFECTS = ['moveCowToMoon', 'stealRocketPiece', 'swapHands', 'moveCowMoonToFarm', 'returnRocketCowsToFarm'];
+/** Cards that pick a whole player via a popup (Wind, Cow Wrangler, Space Cowboy). */
+const POPUP_EFFECTS = ['swapHands', 'moveCowMoonToFarm', 'returnRocketCowsToFarm'];
+/** Cards that pick a specific spot by clicking a highlighted zone on the table. */
+const ZONE_EFFECTS = ['moveCowToMoon', 'stealRocketPiece'];
 
 // ------------------------------------------------------- 3D table camera ---
-// Redesign v2 §1.1–§1.2: free-orbiting yaw, clamped pitch/zoom. These mirror
-// the documentation constants in styles.css's :root — this file is the
-// authoritative source (styles.css just documents them for reference).
-const CAMERA_PITCH_DEFAULT = 50; // deg from vertical
-const CAMERA_PITCH_MIN = 38;
-const CAMERA_PITCH_MAX = 62;
-const CAMERA_ZOOM_MIN = 0.55;
-const CAMERA_ZOOM_MAX = 1.6;
-const CAMERA_ZOOM_STEP = 0.15; // per wheel notch / button press
-const CAMERA_ROTATE_SENSITIVITY = 0.35; // deg of yaw per px of drag delta
-const CAMERA_YAW_STEP = 6; // deg per arrow-key press
-const CAMERA_BASE_DISTANCE = 2700; // px; --camera-z = -BASE / zoom (scaled up with --disc-radius, styles.css)
-const PIECE_SNAP_RADIUS_PX = 28; // local px; matches --piece-snap-radius-px (v2 §1.6)
+// Presentation-only camera state for the round table (see the Table component
+// and the scene block in styles.css). These mirror --camera-* / --disc-* in
+// styles.css's :root; CAMERA_DIST in particular MUST match --camera-dist or
+// the zoom maths below lands at the wrong scale.
+const CAMERA_PITCH_DEFAULT = 48; // deg of tilt: "sitting at the table"
+const CAMERA_PITCH_MIN = 26;
+const CAMERA_PITCH_MAX = 68;
+const CAMERA_PITCH_STEP = 4; // per arrow-key press
+const SPIN_KEY_STEP = 15; // deg of table spin per arrow-key press
+const ZOOM_MIN = 0.3;
+const ZOOM_MAX = 1.6;
+const ZOOM_STEP = 0.12;
+const ZOOM_DEFAULT = 0.5; // frames the whole table at a typical window size
+const CAMERA_DIST = 1500; // px; must equal --camera-dist in styles.css
 
-const wrapYaw = (deg) => ((deg % 360) + 360) % 360;
+const wrapDeg = (d) => ((d % 360) + 360) % 360;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-
-// Follow-up fix (2026-08): seats no longer wrap the table's full 360°, which
-// used to put roughly half the players on the disc's far side — a vertical
-// standing panel rotated to face the center reads as upside-down/backwards
-// from there, i.e. "on the opposite face" of the table. All seats now sit
-// within one arc of the near face instead, fanned out either side of your
-// own seat (always index 0 in `seated`, kept at yaw 0 / dead centre); the
-// camera still orbits freely to bring any seat to the front, same as before.
-const SEAT_ARC_DEGREES = 150; // degrees spread across the far side of the fan
-function seatAngleFor(idx, n) {
-  if (idx === 0 || n <= 1) return 0;
-  const side = idx % 2 === 1 ? 1 : -1; // alternate right/left of your own seat
-  const rank = Math.ceil(idx / 2); // 1st, 2nd... seat out from centre on that side
-  const step = SEAT_ARC_DEGREES / n;
-  return side * rank * step;
-}
+// An element at translateZ(d) under perspective P renders at scale P/(P-d),
+// so to hit a target scale (zoom) we push the camera to d = P(1 - 1/zoom).
+const zoomToZ = (zoom) => CAMERA_DIST * (1 - 1 / zoom);
 
 function Game({ state, deadline }) {
   // Hooks first (before any early return) so hook order is stable.
@@ -537,16 +412,6 @@ function Game({ state, deadline }) {
   const [picker, setPicker] = useState(null); // player-choice card (popup)
   const [zone, setZone] = useState(null); // zone-select card (click a spot on the table)
   const [zoom, setZoom] = useState(null); // a card being read big (rendered outside the hand rail)
-  // Camera state (redesign v2 §1.1): disposable, presentation-only, never
-  // sent to the server, reset on reload — same category as the existing
-  // piece/cow drag offsets.
-  const [camera, setCamera] = useState({ yaw: 0, pitch: CAMERA_PITCH_DEFAULT, zoom: 1 });
-  // Card-flight bookkeeping (v2 §1.5): which hand-card ids are mid-flight-in
-  // (hidden until their ghost lands) and whether the discard face is
-  // mid-flight-in from a play — both disposable presentation state, owned
-  // here since Hand triggers them but Table renders the discard pile.
-  const [flyingIds, setFlyingIds] = useState(() => new Set());
-  const [discardFlight, setDiscardFlight] = useState(false);
 
   const g = state.game;
   if (!g) return html`<p className="waiting">Waiting for game state…</p>`;
@@ -588,26 +453,8 @@ function Game({ state, deadline }) {
     </p>`}
 
     <${Hud} g=${g} deadline=${deadline} myActionPhase=${myActionPhase} />
-    <${Table}
-      g=${g}
-      you=${you}
-      myTurn=${myTurn}
-      myActionPhase=${myActionPhase}
-      zone=${zone}
-      onZonePick=${zonePick}
-      camera=${camera}
-      setCamera=${setCamera}
-      discardFlight=${discardFlight}
-    />
-    <${Hand}
-      you=${you}
-      interactive=${myActionPhase}
-      onPlay=${onPlay}
-      onZoom=${setZoom}
-      flyingIds=${flyingIds}
-      setFlyingIds=${setFlyingIds}
-      setDiscardFlight=${setDiscardFlight}
-    />
+    <${Table} g=${g} you=${you} myTurn=${myTurn} myActionPhase=${myActionPhase} zone=${zone} onZonePick=${zonePick} />
+    <${Hand} you=${you} interactive=${myActionPhase} onPlay=${onPlay} onZoom=${setZoom} />
 
     ${zoom &&
     html`<div className="overlay" onClick=${() => setZoom(null)}>
@@ -640,7 +487,7 @@ function Game({ state, deadline }) {
 
     ${zone &&
     html`<div className="target-bar">
-      <span>Playing <b>${zone.name}</b> — click a highlighted spot (drag the table or use ◀ ▶ arrow keys to look around).</span>
+      <span>Playing <b>${zone.name}</b> — click a highlighted spot (◀ ▶ for other players).</span>
       <button onClick=${() => zonePick({})}>Target no one</button>
       <button className="subtle" onClick=${() => setZone(null)}>Cancel</button>
     </div>`}
@@ -699,7 +546,7 @@ function Game({ state, deadline }) {
 const DRAG_THRESHOLD = 6; // px before a press counts as a drag, not a click
 const PLAY_LIFT = 110; // px dragged up before it's a "play", not a "reorder"
 
-function Hand({ you, interactive, onPlay, onZoom, flyingIds, setFlyingIds, setDiscardFlight }) {
+function Hand({ you, interactive, onPlay, onZoom }) {
   const serverCards = you?.hand || [];
   const serverIds = serverCards.map((c) => c.instanceId);
   const [order, setOrder] = useState(serverIds);
@@ -714,45 +561,6 @@ function Hand({ you, interactive, onPlay, onZoom, flyingIds, setFlyingIds, setDi
       const added = serverIds.filter((id) => !kept.includes(id));
       const next = [...kept, ...added];
       return next.length === prev.length && next.every((v, i) => v === prev[i]) ? prev : next;
-    });
-  }, [idsKey]);
-
-  // Card flight (v2 §1.5): a card entering the hand (a draw pick queued in
-  // Table via queueDrawFlight) or leaving it (a play queued below via
-  // queuePlayFlight) gets a FLIP ghost flown between its captured source
-  // position and its real destination, once that destination has actually
-  // rendered. Purely cosmetic — the server state this reflects already
-  // landed; this only decorates how it appears.
-  const prevIdsRef = useRef(serverIds);
-  useEffect(() => {
-    const prev = prevIdsRef.current;
-    const added = serverIds.filter((id) => !prev.includes(id));
-    const removed = prev.filter((id) => !serverIds.includes(id));
-    prevIdsRef.current = serverIds;
-
-    added.forEach((id) => {
-      const snap = pendingDraws.shift();
-      if (!snap) return;
-      setFlyingIds?.((s) => new Set(s).add(id));
-      requestAnimationFrame(() => {
-        flyGhost(snap, flightEls.hand.get(id), { duration: 350 }, () => {
-          setFlyingIds?.((s) => {
-            const next = new Set(s);
-            next.delete(id);
-            return next;
-          });
-        });
-      });
-    });
-
-    removed.forEach((id) => {
-      const snap = pendingPlays.get(id);
-      if (!snap) return; // untracked removal (e.g. recycle) — no flight
-      pendingPlays.delete(id);
-      setDiscardFlight?.(true);
-      requestAnimationFrame(() => {
-        flyGhost(snap, flightEls.discard, { duration: 300, rotateEnd: 6 }, () => setDiscardFlight?.(false));
-      });
     });
   }, [idsKey]);
 
@@ -798,10 +606,7 @@ function Hand({ you, interactive, onPlay, onZoom, flyingIds, setFlyingIds, setDi
         return;
       }
       if (mode === 'play') {
-        if (interactive && !isCownter(c)) {
-          queuePlayFlight(c.instanceId);
-          onPlay(c);
-        }
+        if (interactive && !isCownter(c)) onPlay(c);
         return; // released too low / not playable → just drops back, no reorder
       }
       const idx = idxAt(ev.clientX);
@@ -838,9 +643,8 @@ function Hand({ you, interactive, onPlay, onZoom, flyingIds, setFlyingIds, setDi
             (c, i) => html`<div
               className=${`rail-card card--${cardKind(c)} ${cardArt(c) ? 'has-art' : ''} ${drag?.id === c.instanceId ? `is-drag ${drag.mode}` : ''} ${
                 shifts(c, i) ? 'shift' : ''
-              } ${flyingIds?.has(c.instanceId) ? 'flight-hidden' : ''}`}
+              }`}
               key=${c.instanceId}
-              ref=${regFlightEl('hand', c.instanceId)}
               title=${`${c.name} — ${c.text}`}
               style=${drag?.id === c.instanceId ? { transform: `translate(${drag.dx}px, ${drag.dy}px)` } : undefined}
               onPointerDown=${(e) => onDown(e, c)}
@@ -977,9 +781,7 @@ function pieceInfo(card) {
 /**
  * The launch pad: rocket pieces stacked bottom→top, cows shown as tokens.
  * During a zone-target play it becomes interactive: Rocket Thief makes each
- * piece clickable; Mini Rocket and Cow Wrangler make the rocket's cows
- * clickable (v2 §1.3 — Cow Wrangler moved here from its old popup; the
- * payload it sends is unchanged, just sourced from a zone click now).
+ * piece clickable; Mini Rocket makes the rocket's cows clickable.
  */
 function LaunchPad({ p, zone, onZonePick }) {
   const r = p.rocket;
@@ -987,52 +789,19 @@ function LaunchPad({ p, zone, onZonePick }) {
   const sorted = [...r.pieces].sort((a, b) => (order[pieceInfo(a).part] ?? 3) - (order[pieceInfo(b).part] ?? 3));
   const topFirst = [...sorted].reverse(); // rocket top sits highest on screen
   const steal = zone && zone.effect === 'stealRocketPiece' && !p.inactive && r.pieces.length > 0;
-  const miniRocketCow = zone && zone.effect === 'moveCowToMoon' && !p.inactive && r.cows > 0;
-  const wranglerCow = zone && zone.effect === 'returnRocketCowsToFarm' && !p.inactive && r.cows > 0;
-  const rocketCow = miniRocketCow || wranglerCow;
-  const rocketCowPick = () =>
-    onZonePick(miniRocketCow ? { targetPlayerId: p.id, from: 'rocket' } : { targetPlayerId: p.id });
+  const rocketCow = zone && zone.effect === 'moveCowToMoon' && !p.inactive && r.cows > 0;
 
   // Pick up and move pieces freely for the tabletop feel — a little assemble-
-  // the-rocket mini-game. Works any time (other players' turns, the draw
-  // step). Disabled only while Rocket Thief targeting is active (there a
-  // click steals the piece). `offsets` is keyed by piece instanceId, so it's
-  // per-piece and per-player.
-  //
-  // Magnetic connector snapping (v2 §1.6), replacing the old fixed-slot snap:
-  // a `bottom` part has only a top-connector, a `top` part only a
-  // bottom-connector, a `middle` has both, and a wild piece exposes both and
-  // mates with whichever compatible neighbor it's dropped near first.
-  // `links[id] = { top, bottom }` tracks which neighbor (if any) occupies
-  // each connector, so a connector already in use isn't offered twice. This
-  // is 100% cosmetic (§0/§1.6) — it only ever touches `offsets`/`links`
-  // local state, never anything the engine reads for rocketComplete/launch.
+  // the-rocket mini-game. Each piece keeps a persistent offset from its home
+  // slot in the stack; released close to home it snaps into place (the home
+  // slots ARE the top-over-middle-over-bottom stack), otherwise it stays put.
+  // Works any time (other players' turns, the draw step). Disabled only while
+  // Rocket Thief targeting is active (there a click steals the piece).
+  // `offsets` is keyed by piece instanceId, so it's per-piece and per-player.
   const [offsets, setOffsets] = useState({});
-  const [links, setLinks] = useState({}); // instanceId -> { top: id|null, bottom: id|null }
   const [dragId, setDragId] = useState(null);
   const padRef = useRef(null);
-  const pieceElsRef = useRef(new Map()); // instanceId -> DOM el, for live snap measurement
-  const regPieceEl = (id) => (el) => {
-    if (el) pieceElsRef.current.set(id, el);
-    else pieceElsRef.current.delete(id);
-  };
-
-  /** A piece's open connector sides, by rocket part. Wild ('any') exposes both. */
-  const connectorsOf = (pc) => {
-    const part = pieceInfo(pc).part;
-    if (part === 'bottom') return { top: true, bottom: false };
-    if (part === 'top') return { top: false, bottom: true };
-    return { top: true, bottom: true }; // 'middle' and wild/'any' alike
-  };
-
-  /** Free `id` from whatever neighbor(s) it was linked to (both sides). */
-  const unlink = (id, from) => {
-    const mine = from[id];
-    const next = { ...from, [id]: { top: null, bottom: null } };
-    if (mine?.top && next[mine.top]) next[mine.top] = { ...next[mine.top], bottom: null };
-    if (mine?.bottom && next[mine.bottom]) next[mine.bottom] = { ...next[mine.bottom], top: null };
-    return next;
-  };
+  const SNAP_DIST = 48; // release this close to home and the piece clicks in
 
   const startDrag = (e, pc) => {
     if (steal || e.button !== 0) return;
@@ -1049,71 +818,14 @@ function LaunchPad({ p, zone, onZonePick }) {
       window.removeEventListener('pointerup', end);
       window.removeEventListener('pointercancel', end);
       setDragId(null);
-
-      if (outsideArea(padRef, ev)) {
-        setOffsets((o) => ({ ...o, [id]: { dx: 0, dy: 0 } })); // dropped outside the pad entirely: home
-        setLinks((l) => unlink(id, l));
-        return;
-      }
-
-      setLinks((prevLinks) => {
-        const freed = unlink(id, prevLinks); // this piece's own old links don't block a re-snap to the same spot
-        const el = pieceElsRef.current.get(id);
-        const myConn = connectorsOf(pc);
-        let best = null; // { neighborId, mySide, theirSide, dist, myRect, neighborRect, scale }
-
-        if (el) {
-          const myRect = el.getBoundingClientRect();
-          const scale = el.offsetWidth > 0 ? myRect.width / el.offsetWidth : 1; // local→screen, self-calibrating (captures zoom + 3D foreshortening)
-          const radiusScreen = PIECE_SNAP_RADIUS_PX * scale;
-          const myCenterX = myRect.left + myRect.width / 2;
-
-          for (const other of r.pieces) {
-            if (other.instanceId === id) continue;
-            const oEl = pieceElsRef.current.get(other.instanceId);
-            if (!oEl) continue;
-            const oRect = oEl.getBoundingClientRect();
-            const oConn = connectorsOf(other);
-            const oLinks = freed[other.instanceId] || { top: null, bottom: null };
-            const oCenterX = oRect.left + oRect.width / 2;
-
-            // my bottom-connector ↔ their top-connector: I sit just above them.
-            if (myConn.bottom && oConn.top && !oLinks.top) {
-              const dist = Math.hypot(myCenterX - oCenterX, myRect.top + myRect.height - oRect.top);
-              if (dist < radiusScreen && (!best || dist < best.dist)) {
-                best = { neighborId: other.instanceId, mySide: 'bottom', theirSide: 'top', dist, myRect, oRect, scale };
-              }
-            }
-            // my top-connector ↔ their bottom-connector: I sit just below them.
-            if (myConn.top && oConn.bottom && !oLinks.bottom) {
-              const dist = Math.hypot(myCenterX - oCenterX, myRect.top - (oRect.top + oRect.height));
-              if (dist < radiusScreen && (!best || dist < best.dist)) {
-                best = { neighborId: other.instanceId, mySide: 'top', theirSide: 'bottom', dist, myRect, oRect, scale };
-              }
-            }
-          }
+      setOffsets((o) => {
+        const cur = o[id] || { dx: 0, dy: 0 };
+        // snap into the assembled stack if released close to home, or back home
+        // if dropped outside the launch pad entirely.
+        if (Math.hypot(cur.dx, cur.dy) < SNAP_DIST || outsideArea(padRef, ev)) {
+          return { ...o, [id]: { dx: 0, dy: 0 } };
         }
-
-        if (!best) {
-          return freed; // no compatible neighbor in range — stays exactly where released
-        }
-
-        // Snap flush against the neighbor's opposite edge, same horizontal
-        // centre — computed in screen space, then converted back to local
-        // offset units via the same self-calibrating scale.
-        const targetCenterX = best.oRect.left + best.oRect.width / 2;
-        const targetTop = best.mySide === 'bottom' ? best.oRect.top - best.myRect.height : best.oRect.top + best.oRect.height;
-        const screenDx = targetCenterX - (best.myRect.left + best.myRect.width / 2);
-        const screenDy = targetTop - best.myRect.top;
-        setOffsets((o) => {
-          const cur = o[id] || { dx: 0, dy: 0 };
-          return { ...o, [id]: { dx: cur.dx + screenDx / best.scale, dy: cur.dy + screenDy / best.scale } };
-        });
-
-        const next = { ...freed };
-        next[id] = { ...next[id], [best.mySide]: best.neighborId };
-        next[best.neighborId] = { ...next[best.neighborId], [best.theirSide]: id };
-        return next;
+        return o;
       });
     };
     window.addEventListener('pointermove', move);
@@ -1134,7 +846,6 @@ function LaunchPad({ p, zone, onZonePick }) {
               return html`<div
                 className=${`pad-card piece--${pieceInfo(pc).type} ${cardArt(pc) ? 'has-art' : ''} ${steal ? 'targetable' : ''} ${dragging ? 'is-dragging' : ''}`}
                 key=${pc.instanceId}
-                ref=${regPieceEl(pc.instanceId)}
                 title=${pc.name}
                 style=${{ transform: `translate(${off.dx}px, ${off.dy}px)`, zIndex: dragging ? 30 : 10 + rank }}
                 onPointerDown=${steal ? undefined : (e) => startDrag(e, pc)}
@@ -1148,16 +859,14 @@ function LaunchPad({ p, zone, onZonePick }) {
           <!-- cows ride ON the rocket: overlaid above the pieces -->
           <div
             className=${`rocket-cows ${rocketCow ? 'targetable' : ''}`}
-            onClick=${rocketCow ? rocketCowPick : undefined}
+            onClick=${rocketCow ? () => onZonePick({ targetPlayerId: p.id, from: 'rocket' }) : undefined}
           >
             <${Tokens} key=${p.id} n=${r.cows} color=${playerColor(p.id)} cap=${r.capacity} draggable=${!rocketCow} areaRef=${padRef} />
           </div>
         </div>`}
     ${r.pieces.length > 0
       ? html`<div className="rocket-count">
-          <small>${r.cows}/${r.capacity}${r.complete ? ' • ready' : ''}${
-            miniRocketCow ? ' — click a cow to send' : wranglerCow ? ' — click to send these home' : ''
-          }</small>
+          <small>${r.cows}/${r.capacity}${r.complete ? ' • ready' : ''}${rocketCow ? ' — click a cow to send' : ''}</small>
         </div>`
       : ''}
   </div>`;
@@ -1190,196 +899,141 @@ function Farm({ p, canHerd, zone, onZonePick }) {
   </div>`;
 }
 
-/**
- * The moon: a disc with every landed cow as a coloured token, plus the count.
- * During a Space Cowboy play (v2 §1.3 — moved here from its old popup, same
- * payload), each player's own cluster of moon tokens becomes its own
- * clickable/targetable zone, since the moon is one shared hub component
- * rather than per-seat.
- */
-function MoonDisc({ g, zone, onZonePick }) {
+/** The moon: a disc with every landed cow as a coloured token, plus the count. */
+function MoonDisc({ g }) {
   const onMoon = g.players.filter((pp) => pp.moon > 0);
   const total = onMoon.reduce((s, pp) => s + pp.moon, 0);
   const moonImg = boardArt('moon');
-  const moonTarget = zone && zone.effect === 'moveCowMoonToFarm';
   return html`<div className=${`moon-disc ${moonImg ? 'moon-art' : ''}`} style=${bgImage(moonImg)}>
     <span className="moon-label">Moon</span>
     <div className="moon-tokens">
-      ${onMoon.map((pp) => {
-        const targetable = moonTarget && !pp.inactive;
-        return html`<span
-          key=${pp.id}
-          className=${`moon-group ${targetable ? 'targetable' : ''}`}
-          onClick=${targetable ? () => onZonePick({ targetPlayerId: pp.id }) : undefined}
-        >
-          ${Array.from(
-            { length: pp.moon },
-            (_, i) => html`<span className="cow-token" key=${pp.id + i} style=${{ background: playerColor(pp.id) }}></span>`,
-          )}
-        </span>`;
-      })}
+      ${onMoon.flatMap((pp) =>
+        Array.from(
+          { length: pp.moon },
+          (_, i) => html`<span className="cow-token" key=${pp.id + i} style=${{ background: playerColor(pp.id) }}></span>`,
+        ),
+      )}
     </div>
     <span className="moon-n">${total} cow${total === 1 ? '' : 's'}</span>
   </div>`;
 }
 
 /**
- * The 3D table scene (redesign v2 §1.1–§1.2): a viewport → camera → disc,
- * with the shared piles in a flat hub at the centre and one seat per
- * connected player arranged radially around the rim. Every seat renders that
- * player's EXISTING LaunchPad + Farm components, untouched — this is a new
- * outer positioning layer wrapped around unchanged inner components (§0),
- * not new game-view components. Seat 0 is always "you" (players list rotated
- * so your own seat lands at yaw 0 by default — you start facing your own
- * zone, matching the pre-redesign default "Your area" view).
+ * The tabletop: one big round table, seen from a player's chair.
  *
- * Camera controls: drag the disc's own rim/felt to rotate (never a card,
- * piece, or token — gesture ownership is enforced by only starting a rotate
- * when the pointerdown's real target is the disc element itself, which
- * survives event bubbling since `e.target` doesn't change as the event
- * bubbles up through seats/hub to the disc's listener); Left/Right arrow
- * keys rotate the same yaw state; wheel/pinch and the corner +/− buttons
- * zoom. Rotate and drag-zoom are instant (no transition, matching the
- * existing "no transition while dragging" rule); button zoom gets a very
- * short eased transition (§8).
+ * Geometry (mirrored by the ".table-viewport / .table-camera / .table-disc"
+ * block in styles.css, which carries the long-form explanation):
+ *   - `.table-camera` applies the TILT only (rotateX). It is the scene's one
+ *     and only 3D rotation.
+ *   - `.table-disc` applies the SPIN as a plain 2D rotate(), i.e. rotation
+ *     about the axis perpendicular to the table's own surface — a lazy susan.
+ *   - `.table-disc` deliberately does NOT set preserve-3d, so everything on
+ *     the table is flattened into the table's plane and lies flat on it like
+ *     real cards, rather than standing up facing the camera.
  *
- * On your draw phase the deck and store cards in the hub are clickable to
- * draw; on your action phase your own seat's farm is clickable to herd.
+ * Seat 0 is always YOU (the player list is rotated below), and seat 0 sits at
+ * angle 0 — the near edge, upright. Spinning the table by -angle brings any
+ * other player's section to that same upright near position, which is what
+ * the old ◀ ▶ "view another player" buttons used to do by swapping content.
  */
-function Table({ g, you, myTurn, myActionPhase, zone, onZonePick, camera, setCamera, discardFlight }) {
+function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
   const players = g.players;
   const n = players.length;
-  const selfIdx = Math.max(0, players.findIndex((pp) => pp.id === g.you));
+  const selfIdx = Math.max(
+    0,
+    players.findIndex((pp) => pp.id === g.you),
+  );
   const seated = [...players.slice(selfIdx), ...players.slice(0, selfIdx)];
 
-  const discRef = useRef(null);
-  const cameraElRef = useRef(null);
-  const rotateRef = useRef(null); // { startX, startYaw } while a rim-drag is live
-  // Camera moves triggered WITHOUT a drag (button zoom, the auto-face-target
-  // assist below, and the camera intro below) get an eased transition;
-  // direct manipulation (rim-drag, arrow keys, wheel/pinch) stays instant —
-  // §1.2's transition policy. easeMs=0 means "no transition" (CSS default).
+  // Camera state: disposable presentation-only UI state, never sent to the
+  // server and reset on reload — same category as the piece/cow drag offsets.
+  const [cam, setCam] = useState({ spin: 0, pitch: CAMERA_PITCH_DEFAULT, zoom: ZOOM_DEFAULT });
+  const [spinning, setSpinning] = useState(false);
   const [easeMs, setEaseMs] = useState(0);
+  const discRef = useRef(null);
   const easeTimer = useRef(null);
-  const easedSetCamera = (updater, duration) => {
-    setEaseMs(duration);
-    setCamera(updater);
+  // Direct manipulation (drag, wheel) is instant; nudges from buttons and keys
+  // get a short ease so they don't read as a jump cut.
+  const easedSetCam = (updater, ms) => {
+    setEaseMs(ms);
+    setCam(updater);
     clearTimeout(easeTimer.current);
-    easeTimer.current = setTimeout(() => setEaseMs(0), duration);
+    easeTimer.current = setTimeout(() => setEaseMs(0), ms);
   };
+  useEffect(() => () => clearTimeout(easeTimer.current), []);
 
-  // Rotate: pointerdown MUST land on the disc's own background — never a
-  // seat's card/piece/token/farm — so a table-drag never steals a game-piece
-  // drag, and vice versa (v2 §1.2, §11 acceptance #2).
+  // ---- spin the table by dragging the felt -------------------------------
+  // Gesture ownership: the press must land on the felt ITSELF (e.target is the
+  // disc, not a card/piece/token/farm sitting on it), so dragging a game piece
+  // never also spins the table and vice versa. e.target is used rather than
+  // currentTarget precisely because it does not change as the event bubbles.
   const onDiscPointerDown = (e) => {
     if (e.button !== 0 || e.target !== discRef.current) return;
     e.preventDefault();
-    rotateRef.current = { startX: e.clientX, startYaw: camera.yaw };
-    const move = (ev) => {
-      const r = rotateRef.current;
-      if (!r) return;
-      setCamera((c) => ({ ...c, yaw: wrapYaw(r.startYaw - (ev.clientX - r.startX) * CAMERA_ROTATE_SENSITIVITY) }));
-    };
+    const rect = discRef.current.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    // The tilt squashes the table's Y axis on screen by cos(pitch). Undoing
+    // that here makes the felt track the pointer under the cursor instead of
+    // lagging badly near the far rim.
+    const ky = 1 / Math.max(0.25, Math.cos((cam.pitch * Math.PI) / 180));
+    const angleAt = (px, py) => (Math.atan2((py - cy) * ky, px - cx) * 180) / Math.PI;
+    const startAngle = angleAt(e.clientX, e.clientY);
+    const startSpin = cam.spin;
+    setSpinning(true);
+    const move = (ev) =>
+      setCam((c) => ({ ...c, spin: wrapDeg(startSpin + angleAt(ev.clientX, ev.clientY) - startAngle) }));
     const end = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', end);
       window.removeEventListener('pointercancel', end);
-      rotateRef.current = null;
+      setSpinning(false);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', end);
   };
 
-  // Arrow-key rotate — replaces the old ◀▶ cycle buttons entirely (§1.7).
+  // ---- keyboard: left/right spin the table, up/down change the tilt ------
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return; // don't hijack typing
-      e.preventDefault();
-      const dir = e.key === 'ArrowLeft' ? -1 : 1;
-      setCamera((c) => ({ ...c, yaw: wrapYaw(c.yaw + dir * CAMERA_YAW_STEP) }));
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowLeft' ? -1 : 1;
+        easedSetCam((c) => ({ ...c, spin: wrapDeg(c.spin + dir * SPIN_KEY_STEP) }), 160);
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowUp' ? 1 : -1;
+        easedSetCam(
+          (c) => ({ ...c, pitch: clamp(c.pitch + dir * CAMERA_PITCH_STEP, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX) }),
+          160,
+        );
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [setCamera]);
-
-  // Camera intro (v2 §1.4): the moment the in-game table scene mounts (a
-  // game starting or being rejoined), swoop the camera in from a wider,
-  // off-axis framing to the resolved default rather than cutting straight to
-  // it — the one camera move here that isn't under the player's hand besides
-  // the auto-face-target assist above. Interpretation note: the menu's own
-  // idling disc (MenuTable) is a separate, simpler DOM element with no game
-  // content, so this can't hand off from its exact live spin position
-  // without keeping one persistent camera element mounted across screens; it
-  // swoops in from a fixed wide/rotated starting framing instead, which reads
-  // the same "arriving at the table" way without that added complexity —
-  // flagged here for a live check, since camera feel can't be verified in
-  // this sandbox (no browser).
-  useEffect(() => {
-    const el = cameraElRef.current;
-    if (!el || typeof el.animate !== 'function') return;
-    if (prefersReducedMotion()) return; // cut straight in, no intro (§8)
-    const to = `translateZ(-${CAMERA_BASE_DISTANCE}px) rotateX(${camera.pitch}deg) rotateY(${camera.yaw}deg)`;
-    const from = `translateZ(-${CAMERA_BASE_DISTANCE * 1.35}px) rotateX(${camera.pitch}deg) rotateY(${wrapYaw(camera.yaw - 55)}deg)`;
-    el.animate([{ transform: from }, { transform: to }], { duration: 1000, easing: 'ease-in-out' });
-    // Mount-only: this is a one-shot entrance, not something that should
-    // replay on every camera.yaw/pitch change while already in-game.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Zoom: wheel/pinch (instant) — trackpad pinch reaches the browser as a
-  // wheel event (often with ctrlKey set), so one handler covers both.
-  const onWheelZoom = (e) => {
-    e.preventDefault();
-    setCamera((c) => ({ ...c, zoom: clamp(c.zoom - e.deltaY * 0.0015, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX) }));
-  };
-  // Zoom buttons (touch/accessibility, since not every device has a wheel) —
-  // these get a brief eased transition rather than an instant jump (§8).
-  const zoomByButton = (delta) =>
-    easedSetCamera((c) => ({ ...c, zoom: clamp(c.zoom + delta, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX) }), 80);
-
-  // Auto-face-target (v2 §1.3): the moment a zone-targeting mode opens, if
-  // the FIRST legal target's seat isn't already facing the camera, ease-
-  // rotate to it — reaching a target that lives at another yaw angle
-  // shouldn't mean "guess which way to spin, blind." Targets beyond the
-  // first are reached by the player's own drag/arrow-key rotation once
-  // there, same as any other seat.
+  // ---- zoom: wheel/pinch (instant) and buttons (eased) -------------------
+  // A trackpad pinch reaches the browser as a wheel event, so one path covers
+  // both. Passive listeners can't preventDefault, hence the explicit effect.
+  const viewportRef = useRef(null);
   useEffect(() => {
-    if (!zone) return;
-    const legal = (pp) => {
-      if (pp.inactive) return false;
-      switch (zone.effect) {
-        case 'stealRocketPiece':
-          return pp.rocket.pieces.length > 0;
-        case 'moveCowToMoon':
-          return pp.farm > 0 || pp.rocket.cows > 0;
-        case 'returnRocketCowsToFarm':
-          return pp.rocket.cows > 0;
-        case 'moveCowMoonToFarm':
-          return pp.moon > 0;
-        case 'swapHands':
-          return pp.id !== g.you; // trading with yourself isn't offered
-        default:
-          return false;
-      }
+    const el = viewportRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      e.preventDefault();
+      setCam((c) => ({ ...c, zoom: clamp(c.zoom - e.deltaY * 0.0012, ZOOM_MIN, ZOOM_MAX) }));
     };
-    const idx = seated.findIndex(legal);
-    if (idx < 0) return;
-    const seatAngle = seatAngleFor(idx, n);
-    const needed = wrapYaw(-seatAngle);
-    const delta = Math.min(wrapYaw(needed - camera.yaw), wrapYaw(camera.yaw - needed));
-    if (delta < 1) return; // already on screen — no unnecessary camera move
-    // Reduced motion: still move to face the target (the player still needs
-    // to see it), just as an instant cut rather than an eased pan (§8).
-    if (prefersReducedMotion()) setCamera((c) => ({ ...c, yaw: needed }));
-    else easedSetCamera((c) => ({ ...c, yaw: needed }), 500);
-    // Re-run only when the targeting card itself changes (opens/closes), not
-    // on every render while it stays open — camera.yaw is deliberately
-    // excluded so the player's own subsequent rotation isn't fought.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zone?.instanceId]);
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+  const nudgeZoom = (d) => easedSetCam((c) => ({ ...c, zoom: clamp(c.zoom + d, ZOOM_MIN, ZOOM_MAX) }), 140);
+  const nudgeSpin = (d) => easedSetCam((c) => ({ ...c, spin: wrapDeg(c.spin + d) }), 220);
+  // "Face me": spin your own seat (angle 0) back to the near edge.
+  const faceMe = () => easedSetCam((c) => ({ ...c, spin: 0, pitch: CAMERA_PITCH_DEFAULT }), 420);
 
   const myDrawPhase = myTurn && !g.pending && g.turn.phase === 'draw';
   const emptyHand = (you?.hand?.length ?? 0) === 0;
@@ -1388,12 +1042,10 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick, camera, setCam
   // the next pick — the server reveals deck draws one at a time.
   const doPick = (pick) => {
     if (!myDrawPhase) return;
-    if (!emptyHand) queueDrawFlight(pick); // fresh-hand draws don't land in the rail one at a time
     send({ type: 'drawCards', picks: emptyHand ? [] : [pick] });
   };
   const deckDisabled =
-    !myDrawPhase ||
-    (!emptyHand && g.deckCount === 0 && g.discard.length === 0 && g.rocketStore.length >= need);
+    !myDrawPhase || (!emptyHand && g.deckCount === 0 && g.discard.length === 0 && g.rocketStore.length >= need);
   const topDiscard = g.discard.length ? g.discard[g.discard.length - 1] : null;
   // The hint bar is always rendered (it reserves its space via CSS) so the
   // table never shifts when it changes; its text follows the phase.
@@ -1408,57 +1060,30 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick, camera, setCam
 
   return html`<div className="table">
     <div className="draw-hint">${phaseHint}</div>
-    <div className="table-viewport" onWheel=${onWheelZoom}>
+    <div className="table-viewport" ref=${viewportRef}>
       <div
         className="table-camera"
-        ref=${cameraElRef}
         style=${{
-          '--camera-yaw': `${camera.yaw}deg`,
-          '--camera-pitch': `${camera.pitch}deg`,
-          '--camera-z': `calc(-${CAMERA_BASE_DISTANCE}px / ${camera.zoom})`,
+          '--camera-pitch': `${cam.pitch}deg`,
+          '--camera-z': `${zoomToZ(cam.zoom)}px`,
           '--camera-ease-ms': `${easeMs}ms`,
         }}
       >
-        <div className="table-disc" ref=${discRef} onPointerDown=${onDiscPointerDown}>
-          <!-- felt/wood visual surface only — see the CSS rule for why this
-               is a separate element from .table-disc itself (spin-axis fix). -->
-          <div className="table-surface"></div>
-
-          <!-- centre hub: moon, deck/discard, rocket store — shared by all seats -->
+        <div
+          className=${`table-disc ${spinning ? 'is-spinning' : ''}`}
+          ref=${discRef}
+          onPointerDown=${onDiscPointerDown}
+          style=${{ '--table-spin': `${cam.spin}deg` }}
+        >
+          <!-- centre of the table: the moon, with the shared piles beside it -->
           <div className="table-hub">
-            <${MoonDisc} g=${g} zone=${zone} onZonePick=${onZonePick} />
-            <div className="piles">
-              <button
-                className=${`pile deck-pile ${myDrawPhase && !deckDisabled ? 'drawable' : ''}`}
-                disabled=${deckDisabled}
-                onClick=${() => doPick({ source: 'deck' })}
-              >
-                <span className="pile-visual" ref=${regFlightEl('deck')}>
-                  <span className="pile-back" style=${bgImage(boardArt('back'))}></span>
-                </span>
-                <span className="pile-cap">Deck · ${g.deckCount}</span>
-              </button>
-              <div className="pile discard-pile">
-                <span className="pile-visual" ref=${regFlightEl('discard')}>
-                  ${topDiscard
-                    ? html`<span
-                        className=${`pile-face card--${cardKind(topDiscard)} ${discardFlight ? 'flight-hidden' : ''}`}
-                        style=${cardArt(topDiscard)
-                          ? { ...bgImage(cardArt(topDiscard)), color: 'transparent', borderTopColor: 'transparent' }
-                          : undefined}
-                      >${topDiscard.name}</span>`
-                    : html`<span className="pile-empty">empty</span>`}
-                </span>
-                <span className="pile-cap">Discard · ${g.discard.length}</span>
-              </div>
-            </div>
+            <div className="table-hub-inner">
             <div className="store">
               <div className="store-cards2">
                 ${g.rocketStore.length
                   ? g.rocketStore.map(
                       (c) => html`<button
                         key=${c.instanceId}
-                        ref=${regFlightEl('store', c.instanceId)}
                         className=${`store-card card--${cardKind(c)} ${cardArt(c) ? 'has-art' : ''} ${myDrawPhase ? 'drawable' : ''}`}
                         disabled=${!myDrawPhase}
                         onClick=${() => doPick({ source: 'rocketStore', instanceId: c.instanceId })}
@@ -1473,54 +1098,73 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick, camera, setCam
               </div>
               <span className="pile-cap">Rocket store</span>
             </div>
+            <div className="piles">
+              <button
+                className=${`pile deck-pile ${myDrawPhase && !deckDisabled ? 'drawable' : ''}`}
+                disabled=${deckDisabled}
+                onClick=${() => doPick({ source: 'deck' })}
+              >
+                <span className="pile-visual">
+                  <span className="pile-back" style=${bgImage(boardArt('back'))}></span>
+                </span>
+                <span className="pile-cap">Deck · ${g.deckCount}</span>
+              </button>
+              <div className="pile discard-pile">
+                <span className="pile-visual">
+                  ${topDiscard
+                    ? html`<span
+                        className=${`pile-face card--${cardKind(topDiscard)}`}
+                        style=${cardArt(topDiscard)
+                          ? { ...bgImage(cardArt(topDiscard)), color: 'transparent', borderTopColor: 'transparent' }
+                          : undefined}
+                      >${topDiscard.name}</span>`
+                    : html`<span className="pile-empty">empty</span>`}
+                </span>
+                <span className="pile-cap">Discard · ${g.discard.length}</span>
+              </div>
+            </div>
+            <${MoonDisc} g=${g} />
+            </div>
           </div>
 
-          <!-- one seat per player, fanned across one arc of the near face
-               (seatAngleFor), with the players list rotated above so your own
-               seat is always i=0 (yaw 0, dead centre). -->
+          <!-- one flat section per player, fanned evenly around the table -->
           ${seated.map((p, i) => {
-            const seatAngle = seatAngleFor(i, n);
+            const seatAngle = (360 / n) * i;
             const isSelf = p.id === g.you;
             const canHerd =
               isSelf && myActionPhase && p.farm > 0 && p.rocket.pieces.length > 0 && p.rocket.cows < p.rocket.capacity;
-            // Wind (swapHands) targets a whole player, not a specific farm/
-            // rocket/moon spot — the zone for "this player" is their own
-            // area-title header (v2 §1.3, same payload the old popup sent).
-            const swapTarget = zone && zone.effect === 'swapHands' && !isSelf && !p.inactive;
             return html`<div
-              className="seat"
+              className=${`seat ${isSelf ? 'seat--self' : ''}`}
               key=${p.id}
-              data-seat=${i}
-              style=${{ transform: `rotateY(${seatAngle}deg) translateZ(var(--disc-radius))` }}
+              style=${{ '--seat-angle': `${seatAngle}deg`, '--pcolor': playerColor(p.id) }}
             >
-              <div className="seat-inner" style=${{ '--pcolor': playerColor(p.id) }}>
+              <div className="seat-inner">
                 <div className="pad-column">
                   <${LaunchPad} p=${p} zone=${zone} onZonePick=${onZonePick} />
                 </div>
-                <div className="play-row">
-                  <div className="player-area">
-                    <div
-                      className=${`area-title ${swapTarget ? 'targetable' : ''}`}
-                      onClick=${swapTarget ? () => onZonePick({ targetPlayerId: p.id }) : undefined}
-                    >
-                      ${isSelf ? 'Your area' : `${p.name}'s area`}${!p.connected ? ' · off' : ''}${p.inactive ? ' · idle' : ''}
-                      <small> · ${p.handCount} in hand · ${p.moon}/10 on moon</small>
-                      ${swapTarget ? html`<small className="farm-hint"> · click to trade hands</small>` : ''}
-                    </div>
-                    <${Farm} p=${p} canHerd=${canHerd} zone=${zone} onZonePick=${onZonePick} />
+                <div className="player-area">
+                  <div className="area-title">
+                    ${isSelf ? 'Your area' : `${p.name}'s area`}${!p.connected ? ' · off' : ''}${p.inactive
+                      ? ' · idle'
+                      : ''}
+                    <small> · ${p.handCount} in hand · ${p.moon}/10 on moon</small>
                   </div>
+                  <${Farm} p=${p} canHerd=${canHerd} zone=${zone} onZonePick=${onZonePick} />
                 </div>
               </div>
             </div>`;
           })}
-
         </div>
       </div>
-      <!-- zoom controls: touch/accessibility fallback for wheel/pinch (§1.2) -->
-      <div className="camera-zoom">
-        <button className="subtle" onClick=${() => zoomByButton(-CAMERA_ZOOM_STEP)} aria-label="Zoom out">−</button>
-        <button className="subtle" onClick=${() => zoomByButton(CAMERA_ZOOM_STEP)} aria-label="Zoom in">+</button>
+
+      <div className="camera-hud">
+        <button className="subtle" onClick=${() => nudgeSpin(-30)} aria-label="Turn the table left">↺</button>
+        <button className="subtle" onClick=${() => nudgeSpin(30)} aria-label="Turn the table right">↻</button>
+        <button className="subtle" onClick=${faceMe} aria-label="Face my own seat">⌂</button>
+        <button className="subtle" onClick=${() => nudgeZoom(ZOOM_STEP)} aria-label="Zoom in">+</button>
+        <button className="subtle" onClick=${() => nudgeZoom(-ZOOM_STEP)} aria-label="Zoom out">−</button>
       </div>
+      <div className="camera-hint">drag the felt to turn the table · ← → turn · ↑ ↓ tilt · scroll to zoom</div>
     </div>
   </div>`;
 }
