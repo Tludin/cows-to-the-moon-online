@@ -338,11 +338,14 @@ input:focus {
 /* ==================================================== in-game: no-scroll */
 /* The whole table fits the viewport; nothing scrolls the page. Home/lobby
    are unaffected. */
+/* In game the table runs FULL BLEED: no page padding, no max width, so the
+   felt reaches every edge of the window. Everything that used to sit in a bar
+   above or below it (turn info, phase hint, activity log, hand) now floats
+   over the table instead — see .hud / .draw-hint / .log / .hand-rail below. */
 #root:has(.app--game) {
   height: 100dvh;
   overflow: hidden;
-  padding: 4px 10px 0;
-  /* the round table wants the whole window, unlike the narrow paper panels */
+  padding: 0;
   max-width: none;
 }
 .app--game {
@@ -351,27 +354,38 @@ input:focus {
   flex-direction: column;
   overflow: hidden;
 }
+/* The title belongs to the home and lobby screens; in game it would just be a
+   bar across the top of the table. */
 #root > .app--game > h1:first-child {
-  font-size: 1rem;
-  font-weight: 500;
-  opacity: 0.75;
-  margin: 2px 0 4px;
+  display: none;
 }
 .app--game .game {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  position: relative; /* the floating HUD / hint / log anchor to this */
   overflow: hidden;
-  padding-bottom: 100px; /* room for the peeking hand rail (matches its peek height) */
 }
+/* Turn info and the Do-nothing / End-turn buttons, floated across the top of
+   the felt. pointer-events are handed back to the controls themselves so the
+   strip never swallows a drag on the table underneath it. */
 .game > .hud {
-  flex: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 15;
+  padding: 8px 14px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(4, 8, 16, 0.55), transparent);
 }
+.game > .hud button,
+.game > .hud .hud-who {
+  pointer-events: auto;
+}
+/* The table now owns the whole game area. */
 .game > .table {
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
 }
 
 /* --------------------------------------------------------- heads-up bar */
@@ -426,20 +440,25 @@ input:focus {
 .table {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 6px 8px;
   overflow: hidden;
   position: relative;
 }
+/* Floated over the felt, under the HUD. It no longer needs to reserve a row:
+   nothing below it can shift, because the table fills the whole area. */
 .draw-hint {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  right: 0;
+  z-index: 15;
+  pointer-events: none;
   text-align: center;
   color: var(--on-felt);
   font-weight: 700;
   font-family: var(--font-head);
   font-size: 0.9rem;
-  opacity: 0.9;
-  /* always reserve one line so the bar never collapses and shifts the table */
-  min-height: 1.3rem;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75);
+  opacity: 0.95;
 }
 
 /* ============================================================ 3D table scene
@@ -618,8 +637,8 @@ input:focus {
 /* Camera controls: screen-anchored HUD, deliberately OUTSIDE the 3D scene. */
 .camera-hud {
   position: absolute;
-  right: 12px;
-  bottom: 12px;
+  right: 14px;
+  bottom: 22px;
   z-index: 20;
   display: flex;
   flex-direction: column;
@@ -642,7 +661,8 @@ input:focus {
 .camera-hint {
   position: absolute;
   left: 12px;
-  bottom: 12px;
+  bottom: 10px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
   z-index: 20;
   color: var(--on-felt-dim);
   font-size: 0.72rem;
@@ -1409,8 +1429,24 @@ input:focus {
   overflow-y: auto;
   font-size: 0.84rem;
 }
+/* Top-left over the felt, below the HUD. It sits at the TOP rather than the
+   bottom because <details> expands downward — anchored to the bottom it grew
+   up over the camera hint, and open it would have run off the window. */
 .app--game .log {
-  flex: none;
+  position: absolute;
+  left: 12px;
+  top: 52px;
+  z-index: 16;
+  width: min(320px, 30vw);
+  padding: 0;
+}
+.app--game .log summary {
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75);
+}
+.app--game .log[open] {
+  background: rgba(4, 8, 16, 0.72);
+  border-radius: var(--radius-sm);
+  padding: 2px 10px;
 }
 .app--game .log[open] .log-feed {
   max-height: 26vh;
