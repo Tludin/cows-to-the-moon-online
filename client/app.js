@@ -390,10 +390,11 @@ const ZONE_EFFECTS = ['moveCowToMoon', 'stealRocketPiece'];
 // styles.css's :root; CAMERA_DIST in particular MUST match --camera-dist or
 // the zoom maths below lands at the wrong scale.
 const CAMERA_PITCH_DEFAULT = 48; // deg of tilt: "sitting at the table"
-const CAMERA_PITCH_MIN = 26;
-const CAMERA_PITCH_MAX = 68;
-const CAMERA_PITCH_STEP = 4; // per arrow-key press
-const SPIN_KEY_STEP = 15; // deg of table spin per arrow-key press
+// Per-frame fraction of the remaining distance the camera closes. Higher is
+// snappier; this lands a little under a fifth of a second to settle at 60fps.
+const CAMERA_SMOOTHING = 0.18;
+// Zoom past this and the table settles onto the nearest player's seat.
+const SNAP_ZOOM = 0.8;
 const ZOOM_MIN = 0.3;
 const ZOOM_MAX = 1.6;
 const ZOOM_STEP = 0.12;
@@ -404,16 +405,21 @@ const SEAT_RADIUS = 560; // px; must equal --seat-radius in styles.css
 // middle of the table: past the default zoom, the table is progressively
 // shifted so the near seat sits under the camera instead of the moon.
 // 0 at the default zoom (whole table framed) -> 1 at full zoom.
-const FOCUS_AT_FULL_ZOOM = 0.92; // fraction of the way out to the seat centre
-// The near seat is closer to the camera than the table's centre, so even once
-// it IS the focus point it still projects below the middle of the frame (the
-// perspective origin sits above centre). This lifts the whole scene in SCREEN
-// space to compensate, ramped in alongside the focus. Expressed as a fraction
-// of the viewport's height so it holds at any window size.
-const FOCUS_LIFT_FRACTION = 0.13;
-const focusAmount = (zoom) => clamp((zoom - ZOOM_DEFAULT) / (ZOOM_MAX - ZOOM_DEFAULT), 0, 1);
+const FOCUS_AT_FULL_ZOOM = 1; // land the play area dead centre, not near it
+// The focus deliberately ramps in FASTER than the zoom: reaching the play area
+// only at maximum zoom would leave it drifting off the edge of the frame
+// through the whole middle of the range. At this rate the camera is fully on
+// the play area by roughly half zoom, and the rest of the range just closes in
+// on it — which is what keeps the play area visible at every zoom level.
+const FOCUS_RAMP = 1.9;
+// Zoomed out, the whole disc is framed and gets nudged up in SCREEN space so
+// the near rim clears the hand rail; zoomed in, the focus point is already the
+// play area so the nudge relaxes to nothing. A fraction of the viewport's
+// height, so it holds at any window size.
+const FRAME_LIFT_FRACTION = 0.06;
+const zoomProgress = (zoom) => clamp((zoom - ZOOM_DEFAULT) / (ZOOM_MAX - ZOOM_DEFAULT), 0, 1);
+const focusAmount = (zoom) => clamp(zoomProgress(zoom) * FOCUS_RAMP, 0, 1);
 
-const wrapDeg = (d) => ((d % 360) + 360) % 360;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // An element at translateZ(d) under perspective P renders at scale P/(P-d),
 // so to hit a target scale (zoom) we push the camera to d = P(1 - 1/zoom).
@@ -958,24 +964,64 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
   );
   const seated = [...players.slice(selfIdx), ...players.slice(0, selfIdx)];
 
-  // Camera state: disposable presentation-only UI state, never sent to the
-  // server and reset on reload — same category as the piece/cow drag offsets.
-  const [cam, setCam] = useState({ spin: 0, pitch: CAMERA_PITCH_DEFAULT, zoom: ZOOM_DEFAULT });
+  // ---- camera ------------------------------------------------------------
+  // One smoothed "target follow" model drives everything: spin and zoom each
+  // have a TARGET, and the rendered value eases toward it on requestAnimation-
+  // Frame. Dragging writes the rendered value directly so the felt tracks the
+  // pointer 1:1; every other input (wheel, buttons, keys, snapping) only moves
+  // the target and lets the easing do the work. That is what makes zooming
+  // smooth regardless of how bursty the wheel events are, and it gives snapping
+  // and "face me" the same motion for free — no CSS transitions involved.
+  //
+  // Spin is kept UNWRAPPED (it may run past 360 or below 0) on purpose: it
+  // makes easing monotonic, so turning never jumps the long way round at the
+  // 359->0 seam. Only the snap helpers normalise it, and they pick the nearest
+  // equivalent angle so the table always takes the short way.
+  const seatStep = 360 / n; // degrees between adjacent seats
+  const camRef = useRef({ spin: 0, zoom: ZOOM_DEFAULT });
+  const targetRef = useRef({ spin: 0, zoom: ZOOM_DEFAULT });
+  const rafRef = useRef(0);
+  const [, bumpFrame] = useReducer((x) => x + 1, 0);
   const [spinning, setSpinning] = useState(false);
-  const [easeMs, setEaseMs] = useState(0);
   const discRef = useRef(null);
-  const easeTimer = useRef(null);
-  // Direct manipulation (drag, wheel) is instant; nudges from buttons and keys
-  // get a short ease so they don't read as a jump cut.
-  const easedSetCam = (updater, ms) => {
-    setEaseMs(ms);
-    setCam(updater);
-    clearTimeout(easeTimer.current);
-    easeTimer.current = setTimeout(() => setEaseMs(0), ms);
-  };
-  useEffect(() => () => clearTimeout(easeTimer.current), []);
+  const viewportRef = useRef(null);
 
-  // ---- spin the table by dragging the felt -------------------------------
+  const runCamera = () => {
+    const c = camRef.current;
+    const t = targetRef.current;
+    const ds = t.spin - c.spin;
+    const dz = t.zoom - c.zoom;
+    if (Math.abs(ds) < 0.03 && Math.abs(dz) < 0.0005) {
+      camRef.current = { spin: t.spin, zoom: t.zoom };
+      rafRef.current = 0;
+    } else {
+      camRef.current = { spin: c.spin + ds * CAMERA_SMOOTHING, zoom: c.zoom + dz * CAMERA_SMOOTHING };
+      rafRef.current = requestAnimationFrame(runCamera);
+    }
+    bumpFrame();
+  };
+  const startCamera = () => {
+    if (!rafRef.current) rafRef.current = requestAnimationFrame(runCamera);
+  };
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+
+  const setTarget = (patch) => {
+    targetRef.current = { ...targetRef.current, ...patch };
+    startCamera();
+  };
+  const cam = camRef.current;
+  // Tilt is DERIVED from zoom, not steered separately: framed-out it sits at
+  // the default lean, and it flattens toward 0deg (looking straight down at
+  // the table) as you close in on a play area.
+  const pitch = CAMERA_PITCH_DEFAULT * (1 - zoomProgress(cam.zoom));
+
+  // Snapping: seat i is at angle seatStep*i, and is brought to the near edge by
+  // spin = -seatStep*i — so every "player is square-on to me" position is an
+  // exact multiple of seatStep, and snapping is just rounding.
+  const snapOf = (spin) => Math.round(spin / seatStep) * seatStep;
+  const stepSnap = (dir) => setTarget({ spin: (Math.round(targetRef.current.spin / seatStep) + dir) * seatStep });
+
+  // ---- spin the table by dragging the felt --------------------------------
   // Gesture ownership: the press must land on the felt ITSELF (e.target is the
   // disc, not a card/piece/token/farm sitting on it), so dragging a game piece
   // never also spins the table and vice versa. e.target is used rather than
@@ -986,54 +1032,73 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
     const rect = discRef.current.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
-    // The tilt squashes the table's Y axis on screen by cos(pitch). Undoing
-    // that here makes the felt track the pointer under the cursor instead of
-    // lagging badly near the far rim.
-    const ky = 1 / Math.max(0.25, Math.cos((cam.pitch * Math.PI) / 180));
+    // The tilt squashes the table's Y axis on screen by cos(pitch); undoing it
+    // makes the felt stay under the cursor instead of lagging near the far rim.
+    // At full zoom the tilt is 0 and this correction correctly becomes 1.
+    const ky = 1 / Math.max(0.25, Math.cos((pitch * Math.PI) / 180));
     const angleAt = (px, py) => (Math.atan2((py - cy) * ky, px - cx) * 180) / Math.PI;
     const startAngle = angleAt(e.clientX, e.clientY);
-    const startSpin = cam.spin;
+    const startSpin = camRef.current.spin;
     setSpinning(true);
-    const move = (ev) =>
-      setCam((c) => ({ ...c, spin: wrapDeg(startSpin + angleAt(ev.clientX, ev.clientY) - startAngle) }));
+    const move = (ev) => {
+      // Written straight to the rendered value: a drag should track the finger
+      // exactly, not trail it through the smoother.
+      const spin = startSpin + angleAt(ev.clientX, ev.clientY) - startAngle;
+      camRef.current = { ...camRef.current, spin };
+      targetRef.current = { ...targetRef.current, spin };
+      bumpFrame();
+    };
     const end = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', end);
       window.removeEventListener('pointercancel', end);
       setSpinning(false);
+      // Close in, and the table settles onto whichever player you let go
+      // nearest — so you land square-on to their area rather than half-way
+      // between two seats.
+      if (targetRef.current.zoom >= SNAP_ZOOM) setTarget({ spin: snapOf(targetRef.current.spin) });
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', end);
   };
 
-  // ---- keyboard: left/right spin the table, up/down change the tilt ------
+  // ---- keyboard: left/right step between players, up/down zoom ------------
   useEffect(() => {
     const onKey = (e) => {
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return; // don't hijack typing
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault();
-        const dir = e.key === 'ArrowLeft' ? -1 : 1;
-        easedSetCam((c) => ({ ...c, spin: wrapDeg(c.spin + dir * SPIN_KEY_STEP) }), 160);
+        stepSnap(e.key === 'ArrowLeft' ? -1 : 1);
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
-        const dir = e.key === 'ArrowUp' ? 1 : -1;
-        easedSetCam(
-          (c) => ({ ...c, pitch: clamp(c.pitch + dir * CAMERA_PITCH_STEP, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX) }),
-          160,
-        );
+        nudgeZoom(e.key === 'ArrowUp' ? ZOOM_STEP : -ZOOM_STEP);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seatStep]);
 
-  // ---- zoom: wheel/pinch (instant) and buttons (eased) -------------------
+  // ---- zoom ---------------------------------------------------------------
   // A trackpad pinch reaches the browser as a wheel event, so one path covers
   // both. Passive listeners can't preventDefault, hence the explicit effect.
-  const viewportRef = useRef(null);
-  // Track the viewport's height so the focus lift above stays proportional.
+  // The wheel only moves the TARGET; the smoother above turns a burst of
+  // events into one continuous glide.
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      e.preventDefault();
+      applyZoom(targetRef.current.zoom - e.deltaY * 0.0016);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seatStep]);
+
+  // Track the viewport height so the framing offset below stays proportional.
   const [viewH, setViewH] = useState(0);
   useEffect(() => {
     const el = viewportRef.current;
@@ -1044,20 +1109,18 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el) return;
-    const onWheel = (e) => {
-      e.preventDefault();
-      setCam((c) => ({ ...c, zoom: clamp(c.zoom - e.deltaY * 0.0012, ZOOM_MIN, ZOOM_MAX) }));
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, []);
-  const nudgeZoom = (d) => easedSetCam((c) => ({ ...c, zoom: clamp(c.zoom + d, ZOOM_MIN, ZOOM_MAX) }), 140);
-  const nudgeSpin = (d) => easedSetCam((c) => ({ ...c, spin: wrapDeg(c.spin + d) }), 220);
-  // "Face me": spin your own seat (angle 0) back to the near edge.
-  const faceMe = () => easedSetCam((c) => ({ ...c, spin: 0, pitch: CAMERA_PITCH_DEFAULT }), 420);
+
+  function applyZoom(next) {
+    const zoom = clamp(next, ZOOM_MIN, ZOOM_MAX);
+    const patch = { zoom };
+    // Zooming in past the snap point settles onto the nearest player too, so
+    // closing in always leaves you square-on to somebody's area.
+    if (zoom >= SNAP_ZOOM && targetRef.current.zoom < SNAP_ZOOM) patch.spin = snapOf(targetRef.current.spin);
+    setTarget(patch);
+  }
+  const nudgeZoom = (d) => applyZoom(targetRef.current.zoom + d);
+  // "Face me": back to your own seat (angle 0) and the framed-out view.
+  const faceMe = () => setTarget({ spin: 0, zoom: ZOOM_DEFAULT });
 
   // Focus point for the zoom, in the table's own (unrotated) coordinates.
   // The seat currently at the near edge is the one whose angle is -spin, and a
@@ -1071,7 +1134,10 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
     x: -focusT * SEAT_RADIUS * Math.sin(spinRad),
     y: -focusT * SEAT_RADIUS * Math.cos(spinRad),
   };
-  const focusLift = -focusT * FOCUS_LIFT_FRACTION * viewH;
+  // Framing offset. Zoomed out the whole disc is in view and is nudged up so
+  // the near rim (and your own area on it) clears the hand rail; zoomed in the
+  // focus point is already the play area, so the nudge relaxes to nothing.
+  const focusLift = -(1 - focusT) * FRAME_LIFT_FRACTION * viewH;
 
   const myDrawPhase = myTurn && !g.pending && g.turn.phase === 'draw';
   const emptyHand = (you?.hand?.length ?? 0) === 0;
@@ -1102,10 +1168,9 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
       <div
         className="table-camera"
         style=${{
-          '--camera-pitch': `${cam.pitch}deg`,
+          '--camera-pitch': `${pitch}deg`,
           '--camera-z': `${zoomToZ(cam.zoom)}px`,
           '--focus-lift': `${focusLift}px`,
-          '--camera-ease-ms': `${easeMs}ms`,
         }}
       >
         <div
@@ -1197,13 +1262,13 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
       </div>
 
       <div className="camera-hud">
-        <button className="subtle" onClick=${() => nudgeSpin(-30)} aria-label="Turn the table left">↺</button>
-        <button className="subtle" onClick=${() => nudgeSpin(30)} aria-label="Turn the table right">↻</button>
+        <button className="subtle" onClick=${() => stepSnap(-1)} aria-label="Turn to the previous player">↺</button>
+        <button className="subtle" onClick=${() => stepSnap(1)} aria-label="Turn to the next player">↻</button>
         <button className="subtle" onClick=${faceMe} aria-label="Face my own seat">⌂</button>
         <button className="subtle" onClick=${() => nudgeZoom(ZOOM_STEP)} aria-label="Zoom in">+</button>
         <button className="subtle" onClick=${() => nudgeZoom(-ZOOM_STEP)} aria-label="Zoom out">−</button>
       </div>
-      <div className="camera-hint">drag the felt to turn the table · ← → turn · ↑ ↓ tilt · scroll to zoom</div>
+      <div className="camera-hint">drag the felt to turn · ← → next player · ↑ ↓ zoom · scroll to zoom</div>
     </div>
   </div>`;
 }

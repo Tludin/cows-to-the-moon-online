@@ -490,7 +490,6 @@ input:focus {
      keep the play area centred rather than low in frame. */
   transform: translateY(var(--focus-lift, 0px)) translateZ(var(--camera-z, 0px))
     rotateX(var(--camera-pitch, var(--camera-pitch-default)));
-  transition: transform var(--camera-ease-ms, 0ms) ease-out;
 }
 /* The table itself. rotate() = the lazy-susan spin (see the note above). */
 .table-disc {
@@ -508,7 +507,6 @@ input:focus {
      Order matters: `rotate() translate()` translates in the table's own
      unrotated frame, which is why app.js can pass a plain table-space point. */
   transform: rotate(var(--table-spin, 0deg)) translate(var(--focus-x, 0px), var(--focus-y, 0px));
-  transition: transform var(--camera-ease-ms, 0ms) ease-out;
   cursor: grab;
   touch-action: none;
   background:
@@ -546,7 +544,6 @@ input:focus {
   height: 0;
   transform-origin: 0 0;
   transform: rotate(calc(-1 * var(--table-spin, 0deg)));
-  transition: transform var(--camera-ease-ms, 0ms) ease-out;
 }
 .table-hub-inner {
   position: absolute;
