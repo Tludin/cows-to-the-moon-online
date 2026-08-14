@@ -395,6 +395,14 @@ const CAMERA_PITCH_DEFAULT = 48; // deg of tilt: "sitting at the table"
 const CAMERA_SMOOTHING = 0.18;
 // Zoom past this and the table settles onto the nearest player's seat.
 const SNAP_ZOOM = 0.8;
+// Zoom used when you jump to the shared piles in the middle of the table.
+const CENTRE_ZOOM = 1.15;
+// The hand rail peeks 100px up from the bottom of the window, and slides up to
+// roughly 200px when hovered (see .hand-rail). Zoomed in on a play area the
+// scene is lifted by this fraction of the viewport height so the area sits
+// clear of the rail even when it is open. Focused on the middle of the table
+// there is nothing to clear, so it does not apply there.
+const PLAY_AREA_LIFT_FRACTION = 0.05;
 const ZOOM_MIN = 0.3;
 const ZOOM_MAX = 1.6;
 const ZOOM_STEP = 0.12;
@@ -978,8 +986,11 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
   // 359->0 seam. Only the snap helpers normalise it, and they pick the nearest
   // equivalent angle so the table always takes the short way.
   const seatStep = 360 / n; // degrees between adjacent seats
-  const camRef = useRef({ spin: 0, zoom: ZOOM_DEFAULT });
-  const targetRef = useRef({ spin: 0, zoom: ZOOM_DEFAULT });
+  // `centre` blends the zoom's focus between the near play area (0) and the
+  // middle of the table (1), so jumping to the shared piles and back is a
+  // smooth move rather than a cut.
+  const camRef = useRef({ spin: 0, zoom: ZOOM_DEFAULT, centre: 0 });
+  const targetRef = useRef({ spin: 0, zoom: ZOOM_DEFAULT, centre: 0 });
   const rafRef = useRef(0);
   const [, bumpFrame] = useReducer((x) => x + 1, 0);
   const [spinning, setSpinning] = useState(false);
@@ -991,11 +1002,16 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
     const t = targetRef.current;
     const ds = t.spin - c.spin;
     const dz = t.zoom - c.zoom;
-    if (Math.abs(ds) < 0.03 && Math.abs(dz) < 0.0005) {
-      camRef.current = { spin: t.spin, zoom: t.zoom };
+    const dc = t.centre - c.centre;
+    if (Math.abs(ds) < 0.03 && Math.abs(dz) < 0.0005 && Math.abs(dc) < 0.002) {
+      camRef.current = { spin: t.spin, zoom: t.zoom, centre: t.centre };
       rafRef.current = 0;
     } else {
-      camRef.current = { spin: c.spin + ds * CAMERA_SMOOTHING, zoom: c.zoom + dz * CAMERA_SMOOTHING };
+      camRef.current = {
+        spin: c.spin + ds * CAMERA_SMOOTHING,
+        zoom: c.zoom + dz * CAMERA_SMOOTHING,
+        centre: c.centre + dc * CAMERA_SMOOTHING,
+      };
       rafRef.current = requestAnimationFrame(runCamera);
     }
     bumpFrame();
@@ -1019,7 +1035,11 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
   // spin = -seatStep*i — so every "player is square-on to me" position is an
   // exact multiple of seatStep, and snapping is just rounding.
   const snapOf = (spin) => Math.round(spin / seatStep) * seatStep;
-  const stepSnap = (dir) => setTarget({ spin: (Math.round(targetRef.current.spin / seatStep) + dir) * seatStep });
+  const stepSnap = (dir) =>
+    setTarget({ spin: (Math.round(targetRef.current.spin / seatStep) + dir) * seatStep, centre: 0 });
+  // Jump to the shared piles in the middle of the table — the deck, discard,
+  // rocket store and moon — which is what the draw phase actually needs.
+  const focusCentre = () => setTarget({ centre: 1, zoom: Math.max(targetRef.current.zoom, CENTRE_ZOOM) });
 
   // ---- spin the table by dragging the felt --------------------------------
   // Gesture ownership: the press must land on the felt ITSELF (e.target is the
@@ -1120,7 +1140,7 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
   }
   const nudgeZoom = (d) => applyZoom(targetRef.current.zoom + d);
   // "Face me": back to your own seat (angle 0) and the framed-out view.
-  const faceMe = () => setTarget({ spin: 0, zoom: ZOOM_DEFAULT });
+  const faceMe = () => setTarget({ spin: 0, zoom: ZOOM_DEFAULT, centre: 0 });
 
   // Focus point for the zoom, in the table's own (unrotated) coordinates.
   // The seat currently at the near edge is the one whose angle is -spin, and a
@@ -1129,15 +1149,23 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
   // i.e. in the table's unrotated frame, so no extra conversion is needed.
   // Negated because we shift the TABLE to bring that point under the camera.
   const focusT = focusAmount(cam.zoom) * FOCUS_AT_FULL_ZOOM;
+  // `centre` = 1 pulls the focus point to the table's middle (0,0), which is
+  // where the moon, deck, discard and store live — so zooming closes in on
+  // the shared piles instead of a play area.
+  const seatFocus = focusT * (1 - cam.centre);
   const spinRad = (cam.spin * Math.PI) / 180;
   const focus = {
-    x: -focusT * SEAT_RADIUS * Math.sin(spinRad),
-    y: -focusT * SEAT_RADIUS * Math.cos(spinRad),
+    x: -seatFocus * SEAT_RADIUS * Math.sin(spinRad),
+    y: -seatFocus * SEAT_RADIUS * Math.cos(spinRad),
   };
   // Framing offset. Zoomed out the whole disc is in view and is nudged up so
   // the near rim (and your own area on it) clears the hand rail; zoomed in the
   // focus point is already the play area, so the nudge relaxes to nothing.
-  const focusLift = -(1 - focusT) * FRAME_LIFT_FRACTION * viewH;
+  // Two separate reasons to nudge the scene up, blended by how far in we are:
+  // framed out, so the near rim clears the hand rail; zoomed in on a play
+  // area, so that area sits above the rail rather than under it. Focused on
+  // the middle of the table only the first applies.
+  const focusLift = -((1 - focusT) * FRAME_LIFT_FRACTION + seatFocus * PLAY_AREA_LIFT_FRACTION) * viewH;
 
   const myDrawPhase = myTurn && !g.pending && g.turn.phase === 'draw';
   const emptyHand = (you?.hand?.length ?? 0) === 0;
@@ -1264,11 +1292,14 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
       <div className="camera-hud">
         <button className="subtle" onClick=${() => stepSnap(-1)} aria-label="Turn to the previous player">↺</button>
         <button className="subtle" onClick=${() => stepSnap(1)} aria-label="Turn to the next player">↻</button>
+        <button className="subtle" onClick=${focusCentre} aria-label="Zoom to the deck, discard, store and moon">◎</button>
         <button className="subtle" onClick=${faceMe} aria-label="Face my own seat">⌂</button>
         <button className="subtle" onClick=${() => nudgeZoom(ZOOM_STEP)} aria-label="Zoom in">+</button>
         <button className="subtle" onClick=${() => nudgeZoom(-ZOOM_STEP)} aria-label="Zoom out">−</button>
       </div>
-      <div className="camera-hint">drag the felt to turn · ← → next player · ↑ ↓ zoom · scroll to zoom</div>
+      <div className="camera-hint">
+        drag the felt to turn · ← → next player · ↑ ↓ zoom · ◎ the shared piles · ⌂ back to you
+      </div>
     </div>
   </div>`;
 }

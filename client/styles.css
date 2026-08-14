@@ -492,10 +492,13 @@ input:focus {
   width: 100%;
   overflow: hidden;
   perspective: var(--camera-dist);
-  /* Bias the vanishing point above centre: the near rim (your own seat) then
-     sits low in frame and the far side stays visible, rather than the table
-     filling the bottom half and running off the top. */
-  perspective-origin: 50% 34%;
+  /* The vanishing point MUST sit on the same point as .table-camera's anchor
+     (which is 50%/50% of this box). When it did not, the whole scene slid down
+     as you zoomed in — the camera's own origin was being scaled away from the
+     vanishing point — so the thing you had focused on drifted off centre by
+     more the closer you got. Framing is handled by --focus-lift instead, which
+     is a screen-space nudge and so is immune to that. */
+  perspective-origin: 50% 50%;
 }
 .table-camera {
   position: absolute;
