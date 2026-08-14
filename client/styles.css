@@ -13,41 +13,182 @@
 
 /* ----------------------------------------------------------------- tokens */
 :root {
-  /* Muted felt surface */
-  --felt-top: #37624a;
-  --felt-bot: #24402f;
-  --felt-edge: #1a2f22;
+  /* ---------- Wood rail (frames the felt at the viewport edge) ---------- */
+  --wood-dark: #2c1a10;
+  --wood-mid: #55341f;
+  --wood-light: #7d5330;
+  --wood-grain: rgba(255, 214, 170, 0.07);
 
-  /* Paper (card faces) & ink */
-  --paper: #f6f3ea;
-  --paper-line: #e4dfd2;
-  --ink: #26302a;
+  /* ---------- Felt surface (deepened + given a weave, see §4) ---------- */
+  --felt-top: #2f5940;
+  --felt-mid: #244a35;
+  --felt-bot: #1c3a29;
+  --felt-edge: #11241a;
+  --felt-weave-light: rgba(255, 255, 255, 0.045);
+  --felt-weave-dark: rgba(0, 0, 0, 0.14);
+
+  /* ---------- Paper / cardstock ---------- */
+  --paper: #f7f3e8;
+  --paper-shade: #d9cfb3; /* the "side" of the cardstock — used for card-edge thickness */
+  --paper-line: #e1dac4;
+  --ink: #241f16;
   --muted: #726f64;
 
-  /* Text sitting on the felt */
-  --on-felt: rgba(255, 255, 255, 0.94);
-  --on-felt-dim: rgba(255, 255, 255, 0.6);
+  /* ---------- Text sitting on felt ---------- */
+  --on-felt: rgba(255, 255, 255, 0.95);
+  --on-felt-dim: rgba(255, 255, 255, 0.72);
   --felt-hair: rgba(255, 255, 255, 0.14);
 
-  /* Card-type accents (kept, lightly muted). Rules call events "green cards". */
+  /* ---------- Card-type accents + their "edge" (thickness) shade ---------- */
   --c-piece: #6c86bf;
+  --c-piece-edge: #44578a;
   --c-event: #5aa863;
+  --c-event-edge: #3c7d46;
   --c-launch: #d98a44;
+  --c-launch-edge: #ad6423;
   --c-cownter: #a179cf;
+  --c-cownter-edge: #7c56ab;
 
-  /* Actions */
-  --accent: #5a9d6a; /* primary / go */
+  /* ---------- Actions ---------- */
+  --accent: #5a9d6a;
   --accent-dark: #4a8459;
-  --warm: #c67b57; /* attention / danger-ish */
+  --warm: #c67b57;
   --neutral: #566;
-  --select: #e6c25c; /* selection glow (moon gold) */
+  --select: #e6c25c;
+  --select-glow: rgba(230, 194, 92, 0.55);
 
-  --radius: 14px;
-  --radius-sm: 9px;
-  --shadow: 0 8px 22px rgba(12, 24, 16, 0.28);
-  --shadow-sm: 0 3px 9px rgba(12, 24, 16, 0.2);
+  /* ---------- Brass (moon rim, chip-style button trim) ---------- */
+  --brass: #c9a24a;
+  --brass-dark: #8a6c28;
+
+  /* ---------- Radius scale ---------- */
+  --radius-xl: 20px; /* table frame */
+  --radius-lg: 14px; /* modals, home/lobby panel (was --radius) */
+  --radius-md: 10px; /* rail/store/zoom cards (was --radius-sm in some spots) */
+  --radius-sm: 8px; /* pile faces, chips */
+  --radius: var(--radius-lg); /* back-compat alias, do not remove — used throughout */
+  --radius-sm-legacy: var(--radius-sm);
+
+  /* ---------- Spacing scale (4px base grid) ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* ---------- Elevation — ONE shadow system, four tiers, single light source (upper-left) ---------- */
+  --shadow-e0: /* resting on the table: store cards, farm tile, moon, deck/discard */
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 3px 6px rgba(6, 14, 9, 0.35),
+    0 9px 18px rgba(6, 14, 9, 0.22);
+  --shadow-e1: /* raised: hover states, pieces resting on the pad, hand cards on peek */
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 6px 14px rgba(6, 14, 9, 0.4),
+    0 16px 28px rgba(6, 14, 9, 0.28);
+  --shadow-e2: /* lifted: actively dragging a piece/cow/hand card */
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 16px 30px rgba(4, 10, 6, 0.5),
+    0 30px 54px rgba(4, 10, 6, 0.34);
+  --shadow-e3: /* floating overlay: modals, popups, zoom card, alert banner, turn banner */
+    0 22px 46px rgba(3, 7, 5, 0.55),
+    0 6px 18px rgba(3, 7, 5, 0.4);
+
+  /* back-compat aliases so unaudited selectors don't silently lose their shadow */
+  --shadow: var(--shadow-e3);
+  --shadow-sm: var(--shadow-e0);
+
+  /* ---------- Typography ---------- */
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif; /* large chrome headings only, echoes the
+    serif titles baked into the card art — see §7 in the redesign spec */
   --font-head: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif;
   --font-body: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* ---------- Scene: the table-in-space 3D camera model (redesign v2 §1–§2) ---------- */
+  --space-black: #05070a;
+  --star-dim: rgba(255, 255, 255, 0.35);
+  --star-bright: rgba(255, 255, 255, 0.85);
+
+  --disc-radius: 340px; /* table radius in the 3D scene */
+  --camera-pitch-default: 50deg;
+  --camera-yaw-default: 0deg;
+
+  /* pixel-space constants also referenced from JS (the TABLE constant in
+     app.js is authoritative; these mirror it for documentation). */
+  --rotate-sensitivity: 0.35; /* deg of yaw per px of drag delta */
+  --zoom-min: 0.55;
+  --zoom-max: 1.6;
+  --piece-snap-radius-px: 28px;
+}
+
+/* ------------------------------------------- physical-card recipe (§3) --- */
+/* --card-edge-color: the "cardstock side" colour used by the box-shadow edge
+   trick below, on every surface that renders a card (.rail-card .store-card
+   .pad-card .zoom-card .pile-face). Card-type modifiers set it; pad-card's
+   rocket-piece types set their own further down, next to their existing
+   border-top-color rules. */
+.card--piece {
+  --card-edge-color: var(--c-piece-edge);
+}
+.card--event {
+  --card-edge-color: var(--c-event-edge);
+}
+.card--launch {
+  --card-edge-color: var(--c-launch-edge);
+}
+.card--cownter {
+  --card-edge-color: var(--c-cownter-edge);
+}
+
+/* A. Cards WITH art — the PNG bakes its own frame/corner; box-shadow only. */
+.rail-card.has-art,
+.store-card.has-art,
+.pad-card.has-art,
+.zoom-card.has-art {
+  box-shadow:
+    2px 3px 0 -1px var(--card-edge-color, var(--paper-shade)),
+    4px 6px 0 -2px color-mix(in srgb, var(--card-edge-color, var(--paper-shade)) 75%, black 18%),
+    var(--shadow-e0);
+}
+/* B. Cards WITHOUT art — keep the existing colored border-top accent (the
+   safety net for a new card added before its art lands); same elevation. */
+.rail-card:not(.has-art),
+.store-card:not(.has-art),
+.pad-card:not(.has-art),
+.zoom-card:not(.has-art) {
+  box-shadow: var(--shadow-e0);
+}
+/* Hover / lift state — any card that can be picked up. store-card and
+   pad-card sit inside the 3D table scene (table-hub / seat, both
+   transform-style: preserve-3d ancestors) as of the table-geometry phase, so
+   their lift is on the Z axis — translateZ reads as "toward the camera"
+   under perspective, where a Y-axis translate would shift a foreshortened
+   card sideways instead. rail-card lives in the hand-rail, which stays
+   screen-anchored outside the 3D scene (§1.7), so it keeps its own
+   translateY hover (set further down, next to the peek-reveal behavior) —
+   this shared rule still gives it the elevation tier + transition timing. */
+.rail-card:hover,
+.store-card.drawable:hover,
+.pad-card:not(.is-dragging):hover {
+  box-shadow: var(--shadow-e1);
+  transition:
+    transform 0.14s ease-out,
+    box-shadow 0.14s ease-out;
+}
+.store-card.drawable:hover,
+.pad-card:not(.is-dragging):hover {
+  transform: translateZ(8px);
+}
+/* Dragging state — jump straight to the lifted tier, no transition.
+   (cow-token gets its own two-state sphere-shading recipe instead, §5.6 —
+   its dragging shadow lifts the contact shadow away rather than jumping to
+   the generic e2 tier, so it's intentionally excluded here.) */
+.pad-card.is-dragging,
+.rail-card.is-drag {
+  box-shadow: var(--shadow-e2) !important;
+  transition: none;
 }
 
 /* ------------------------------------------------------------------ base */
@@ -64,22 +205,32 @@ body {
   color: var(--ink);
   line-height: 1.45;
   min-height: 100vh;
-  /* One continuous felt surface — soft vignette, no busy starfield */
-  background:
-    radial-gradient(ellipse at 50% 22%, var(--felt-top) 0%, var(--felt-bot) 62%, var(--felt-edge) 100%)
-      fixed;
+  /* Starfield (redesign v2 §4): solid near-black + scattered soft dots,
+     static — no twinkle/parallax. Supersedes the flat page-margin wood rail;
+     the table's own wood rim now lives on .table-disc (below) in-game, and
+     as a ring around the paper panel on the flat home/lobby screens. */
+  background: var(--space-black);
+  background-image:
+    radial-gradient(1.5px 1.5px at 20% 30%, var(--star-bright), transparent),
+    radial-gradient(1px 1px at 65% 12%, var(--star-dim), transparent),
+    radial-gradient(1.5px 1.5px at 82% 68%, var(--star-bright), transparent),
+    radial-gradient(1px 1px at 40% 80%, var(--star-dim), transparent),
+    radial-gradient(1px 1px at 92% 40%, var(--star-dim), transparent);
+  background-repeat: repeat;
+  background-size: 340px 340px;
 }
 
 #root {
   max-width: 1060px;
   margin: 0 auto;
   padding: 18px 18px 60px;
+  position: relative;
 }
 
 h1,
 h2,
 h3 {
-  font-family: var(--font-head);
+  font-family: var(--font-display);
   font-weight: 600;
   margin: 0 0 0.4em;
   line-height: 1.15;
@@ -106,16 +257,19 @@ small {
 }
 
 /* --------------------------------------------------------------- buttons */
+/* Small tactile chips (§5.7): a top highlight + the elevation system, with
+   the existing press animation now compressing the shadow to read physically. */
 button {
   font-family: var(--font-head);
   font-size: 0.95rem;
   font-weight: 500;
   color: #fff;
-  background: var(--neutral);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--neutral) 100%, white 12%), var(--neutral));
   border: none;
   border-radius: 999px;
   padding: 8px 15px;
   cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), var(--shadow-e0);
   transition:
     transform 0.06s ease,
     filter 0.15s ease;
@@ -125,22 +279,25 @@ button:hover:not(:disabled) {
 }
 button:active:not(:disabled) {
   transform: translateY(1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 4px rgba(6, 14, 9, 0.3);
 }
 button:disabled {
   background: rgba(255, 255, 255, 0.18);
   color: rgba(255, 255, 255, 0.45);
+  box-shadow: none;
   cursor: not-allowed;
 }
 button.subtle {
   background: transparent !important;
   color: var(--on-felt) !important;
   border: 1.5px solid var(--felt-hair);
+  box-shadow: none;
 }
 /* Primary calls to action */
 .primary-cta,
 .hud-actions button:last-child,
 .respond-panel .cownter-btn {
-  background: var(--accent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 100%, white 14%), var(--accent));
 }
 .card-actions button.recycle,
 .hud-actions button:first-child {
@@ -183,15 +340,49 @@ button.subtle {
   background: var(--ink);
 }
 
+/* --------------------------------------------------- menu idling table (§1.4) */
+/* Screen-anchored backdrop: the same starfield (already on body) + an empty,
+   passively-spinning table disc behind the home/lobby panel. No pointer/
+   keyboard control here — interactivity only exists in-game. */
+.menu-table-viewport {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  perspective: 1400px;
+  pointer-events: none;
+}
+.menu-table-viewport .table-camera {
+  animation: idle-spin 90s linear infinite;
+}
+@keyframes idle-spin {
+  from {
+    transform: translateZ(-1600px) rotateX(var(--camera-pitch-default)) rotateY(0deg);
+  }
+  to {
+    transform: translateZ(-1600px) rotateX(var(--camera-pitch-default)) rotateY(360deg);
+  }
+}
+
 /* -------------------------------------------------------- home / lobby */
+/* §5.9 + §1.4: the one screen with room to spare — give the paper panel a
+   thin wood frame (same ring trick as the deck pile / table rim) so it reads
+   as sitting on the table rather than floating as a bare form, screen-
+   anchored in front of the idling table scene above. Shadow already
+   repoints to --shadow-e3 via the --shadow alias. */
 .home,
 .lobby {
+  position: relative;
+  z-index: 1;
   background: var(--paper);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow:
+    0 0 0 6px var(--wood-mid),
+    0 0 0 8px var(--wood-dark),
+    var(--shadow);
   padding: 24px 26px;
   max-width: 440px;
-  margin: 0 auto;
+  margin: 40px auto;
 }
 .home p,
 .lobby p {
@@ -395,46 +586,120 @@ input:focus {
   min-height: 1.3rem;
 }
 
-/* The main area: a big full-height launch pad on the left, and a right column
-   holding the shared piles (deck/moon/store) on top with the farm below. */
-.table-main {
+/* ============================================================ 3D table scene
+   (redesign v2 §1.1, §4). Nested transforms, wrapping the *existing,
+   unchanged* game components (LaunchPad/Farm/MoonDisc/pile/store) rather than
+   introducing new game-view components — see §1.7's "was → now lives at"
+   table for exactly which old column each piece moved into. */
+
+/* the "window" onto the scene — fills the remaining .table flex space. */
+.table-viewport {
   flex: 1;
   min-height: 0;
-  display: flex;
-  gap: 14px;
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  perspective: 1400px;
 }
-/* LEFT column: the big launch pad. flex:2 so the rocket has a roomy assembly
-   area (room to move pieces around manually in a future set). */
+/* the virtual camera: translateZ + rotateX(pitch) + rotateY(yaw), driven by
+   JS-owned camera state (§1.2). Direct manipulation (rim-drag, arrow keys,
+   wheel/pinch zoom) is instant (--camera-ease-ms defaults to 0ms); camera
+   moves triggered WITHOUT a drag — button zoom, the auto-face-target assist
+   (§1.3), and the menu→game camera intro (§1.4) — set --camera-ease-ms to a
+   duration for the length of that one move, per §1.2's transition policy and
+   the §8 timing table. */
+.table-camera {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform: translateZ(var(--camera-z, -1600px)) rotateX(var(--camera-pitch, var(--camera-pitch-default)))
+    rotateY(var(--camera-yaw, var(--camera-yaw-default)));
+  transition: transform var(--camera-ease-ms, 0ms) ease-in-out;
+}
+/* the physical table: a large circle, wood rim + felt top, floating in the
+   starfield (§4). Drag its own background (not a seat/card/token) to rotate
+   the camera — see the gesture-ownership note on the Table component. */
+.table-disc {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--disc-radius) * 2);
+  height: calc(var(--disc-radius) * 2);
+  margin: calc(var(--disc-radius) * -1) 0 0 calc(var(--disc-radius) * -1);
+  border-radius: 50%;
+  transform-style: preserve-3d;
+  cursor: grab;
+  touch-action: none;
+  background:
+    repeating-linear-gradient(45deg, var(--felt-weave-light) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, var(--felt-weave-dark) 0 1px, transparent 1px 3px),
+    radial-gradient(circle at 50% 42%, var(--felt-top) 0%, var(--felt-mid) 55%, var(--felt-bot) 85%, var(--felt-edge) 100%);
+  background-blend-mode: overlay, overlay, normal;
+  box-shadow:
+    0 0 0 22px var(--wood-mid),
+    0 0 0 26px var(--wood-dark),
+    0 0 0 28px rgba(0, 0, 0, 0.4),
+    0 40px 90px rgba(0, 0, 0, 0.6);
+}
+/* zoom buttons: corner HUD overlay, screen-anchored (outside the 3D scene). */
+.camera-zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.camera-zoom button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  border-radius: 50%;
+}
+/* flat, at the disc's centre: moon, deck/discard, rocket store — everything
+   that used to live in .piles-column + MoonDisc. */
+.table-hub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) translateZ(1px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+/* one per connected player, positioned radially around the disc — contains
+   that player's EXISTING pad-column + player-area (LaunchPad, Farm, Tokens)
+   untouched, per §1.7. seatAngle is set inline per-seat from app.js. */
+.seat {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-style: preserve-3d;
+}
+.seat-inner {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translate(-50%, 0);
+  width: 460px;
+  max-width: 86vw;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 10px;
+}
+/* LEFT of the seat: the launch pad. */
 .pad-column {
   flex: 1.3;
   min-width: 150px;
-  height: 100%;
+  height: 260px;
   display: flex;
   align-items: stretch;
   justify-content: center;
-}
-/* MIDDLE column: moon above the farm (gets the extra room). */
-.center-column {
-  flex: 1.6;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-.center-column .play-row {
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-}
-/* RIGHT column: deck + discard on top, rocket store below (with a gap between). */
-.piles-column {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 30px;
 }
 .piles {
   display: flex;
@@ -460,7 +725,8 @@ input:focus {
   align-items: center;
   justify-content: center;
 }
-/* deck = a face-down card floating on felt */
+/* deck = a face-down card floating on felt. §5.3: same "material" as every
+   other card — retuned to the wood tokens + shared elevation tier. */
 .deck-pile .pile-back {
   position: absolute;
   inset: 0;
@@ -469,19 +735,19 @@ input:focus {
   border: 1.5px solid rgba(255, 255, 255, 0.12);
   /* stacked-card look: a couple of offset layers behind the top card */
   box-shadow:
-    3px 3px 0 -1px #2f4d3b,
-    6px 6px 0 -2px #294536,
-    var(--shadow-sm);
+    3px 3px 0 -1px var(--wood-mid),
+    6px 6px 0 -2px var(--wood-dark),
+    var(--shadow-e0);
 }
 .deck-pile.drawable {
   cursor: pointer;
 }
 .deck-pile.drawable .pile-back {
   box-shadow:
-    0 0 0 2.5px var(--select),
-    3px 3px 0 -1px #2f4d3b,
-    6px 6px 0 -2px #294536,
-    var(--shadow-sm);
+    0 0 0 3px var(--select-glow),
+    3px 3px 0 -1px var(--wood-mid),
+    6px 6px 0 -2px var(--wood-dark),
+    var(--shadow-e1);
 }
 .discard-pile .pile-visual {
   background: rgba(0, 0, 0, 0.14);
@@ -508,7 +774,14 @@ input:focus {
   background: var(--paper);
   border-top: 4px solid var(--paper-line);
   border-radius: 9px;
-  box-shadow: var(--shadow-sm);
+  /* physical-card recipe (§3): edge-thickness sliver + one elevation tier.
+     pile-face doesn't get a separate .has-art toggle in the markup — art is
+     applied via inline style with borderTopColor made transparent — so the
+     edge box-shadow is always on; it reads correctly either way. */
+  box-shadow:
+    2px 3px 0 -1px var(--card-edge-color, var(--paper-shade)),
+    4px 6px 0 -2px color-mix(in srgb, var(--card-edge-color, var(--paper-shade)) 75%, black 18%),
+    var(--shadow-e0);
   overflow: hidden;
 }
 .pile-face.card--piece {
@@ -528,15 +801,19 @@ input:focus {
   font-size: 0.7rem;
 }
 
-/* moon: a soft disc, cows as tokens */
+/* moon: a soft disc, cows as tokens. Brass coin rim (§5.1) — consistent light
+   source with the rest of the scene, applies whether or not art is present. */
 .moon-disc {
   width: 220px;
   height: 220px;
   border-radius: 50%;
   background: radial-gradient(circle at 38% 32%, #f2ecd6, #ddd0a2 60%, #c3b586);
   box-shadow:
-    inset -9px -9px 22px rgba(0, 0, 0, 0.16),
-    0 0 0 3px rgba(255, 255, 255, 0.08);
+    inset -10px -10px 22px rgba(0, 0, 0, 0.22),
+    inset 6px 6px 14px rgba(255, 255, 255, 0.3),
+    0 0 0 4px var(--brass-dark),
+    0 0 0 7px rgba(255, 255, 255, 0.05),
+    var(--shadow-e1);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -553,9 +830,25 @@ input:focus {
 .moon-tokens {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
+  gap: 6px;
   justify-content: center;
   max-width: 170px;
+}
+/* one player's cluster of moon tokens — the zone Space Cowboy targets (§1.3),
+   since the moon is one shared hub component rather than per-seat. */
+.moon-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  border-radius: 999px;
+  padding: 2px;
+}
+.moon-group.targetable {
+  cursor: pointer;
+  box-shadow: 0 0 0 2.5px var(--select-glow);
+}
+.moon-group.targetable:hover {
+  box-shadow: 0 0 0 3px var(--select);
 }
 .moon-n {
   font-weight: 700;
@@ -570,10 +863,16 @@ input:focus {
   align-items: center;
   gap: 6px;
 }
+/* §5.4: a shallow felt-cutout tray so the four cards read as sitting in a
+   recess rather than floating. */
 .store-cards2 {
   display: grid;
   grid-template-columns: repeat(2, auto);
   gap: 9px;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.12);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 .store-card {
   width: 96px; /* match the deck/discard pile size */
@@ -588,7 +887,6 @@ input:focus {
   gap: 4px;
   cursor: default;
   color: var(--ink);
-  box-shadow: var(--shadow-sm);
 }
 .store-card.card--piece {
   border-top-color: var(--c-piece);
@@ -604,12 +902,21 @@ input:focus {
 }
 .store-card.drawable {
   cursor: pointer;
-  /* same persistent gold ring the deck gets while it's a legal draw */
-  box-shadow: 0 0 0 2.5px var(--select), var(--shadow-sm);
+  /* same persistent gold ring the deck gets while it's a legal draw, layered
+     over the physical-card edge recipe (§3) so has-art store cards keep it */
+  box-shadow:
+    0 0 0 3px var(--select-glow),
+    2px 3px 0 -1px var(--card-edge-color, var(--paper-shade)),
+    4px 6px 0 -2px color-mix(in srgb, var(--card-edge-color, var(--paper-shade)) 75%, black 18%),
+    var(--shadow-e0);
 }
 .store-card.drawable:hover {
   transform: translateY(-4px);
-  box-shadow: 0 0 0 2.5px var(--select), var(--shadow);
+  box-shadow:
+    0 0 0 3px var(--select-glow),
+    2px 3px 0 -1px var(--card-edge-color, var(--paper-shade)),
+    4px 6px 0 -2px color-mix(in srgb, var(--card-edge-color, var(--paper-shade)) 75%, black 18%),
+    var(--shadow-e1);
 }
 .sc-name {
   font-family: var(--font-head);
@@ -619,27 +926,16 @@ input:focus {
 }
 
 /* ------------------------------------------------ player area (on felt) */
+/* RIGHT of the seat: moon-above-farm's old "play-row" slot, now just the
+   farm — the old ◀▶ cycle arrows are gone; rotating the whole camera (§1.2)
+   replaces them, per §1.7. */
 .play-row {
   display: flex;
   align-items: stretch;
   gap: 8px;
-  flex: 1;
+  flex: 1.6;
+  min-width: 0;
   min-height: 0;
-}
-.arrow {
-  align-self: center;
-  background: transparent;
-  border: 1.5px solid var(--felt-hair);
-  color: var(--on-felt);
-  border-radius: 50%;
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  font-size: 1.05rem;
-  flex: none;
-}
-.arrow:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
 }
 /* Borderless: the player area is transparent — content floats on the felt,
    with a thin colour underline under the title showing whose area it is. */
@@ -667,6 +963,17 @@ input:focus {
   padding-bottom: 8px;
   margin-bottom: 10px;
   border-bottom: 2px solid var(--pcolor, var(--felt-hair));
+}
+/* Wind (swapHands) target zone: a whole player, not a farm/rocket/moon spot
+   — the header is the closest thing to "click this player" on the table. */
+.area-title.targetable {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  border-bottom-color: var(--select);
+  box-shadow: 0 0 0 2.5px var(--select-glow);
+}
+.area-title.targetable:hover {
+  box-shadow: 0 0 0 3px var(--select);
 }
 .area-title small {
   color: var(--on-felt-dim);
@@ -721,13 +1028,26 @@ input:focus {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  /* §5.2: a small wooden picture frame around the landscape scene. */
+  box-shadow:
+    0 0 0 4px var(--wood-mid),
+    0 0 0 5px rgba(0, 0, 0, 0.25),
+    var(--shadow-e0);
 }
 .farm.herdable {
   cursor: pointer;
-  box-shadow: 0 0 0 2px rgba(90, 157, 106, 0.55);
+  box-shadow:
+    0 0 0 2px rgba(90, 157, 106, 0.55),
+    0 0 0 5px var(--wood-mid),
+    0 0 0 6px rgba(0, 0, 0, 0.25),
+    var(--shadow-e0);
 }
 .farm.herdable:hover {
-  box-shadow: 0 0 0 3px rgba(90, 157, 106, 0.8);
+  box-shadow:
+    0 0 0 3px rgba(90, 157, 106, 0.8),
+    0 0 0 6px var(--wood-mid),
+    0 0 0 7px rgba(0, 0, 0, 0.25),
+    var(--shadow-e1);
 }
 .farm.targetable,
 .rocket-cows.targetable {
@@ -786,16 +1106,15 @@ input:focus {
   padding: 6px 8px;
   color: var(--ink);
   overflow: hidden;
-  /* pick up and move for the tabletop feel; springs back on release */
+  /* pick up and move for the tabletop feel; released piece settles onto the
+     table with a small overshoot (§3/§8) rather than sliding into place. */
   cursor: grab;
   touch-action: none;
   user-select: none;
-  transition: transform 0.18s ease;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .pad-card.is-dragging {
   cursor: grabbing;
-  transition: none;
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.42);
 }
 .pad-card .card-name {
   font-size: 0.6rem;
@@ -803,15 +1122,19 @@ input:focus {
 }
 .pad-card.piece--nasa_import {
   border-top-color: #5878b8;
+  --card-edge-color: #3a5686;
 }
 .pad-card.piece--farmmade {
   border-top-color: #63954a;
+  --card-edge-color: #446b31;
 }
 .pad-card.piece--heavily_improvised {
   border-top-color: #b8763f;
+  --card-edge-color: #8c5a2c;
 }
 .pad-card.piece--wild {
   border-top-color: #a179cf;
+  --card-edge-color: var(--c-cownter-edge);
 }
 .pad-card.targetable {
   cursor: pointer;
@@ -857,13 +1180,22 @@ input:focus {
   justify-content: center;
   max-width: 200px;
 }
+/* §5.6: real sphere shading (specular highlight upper-left, matching the
+   global light) plus a tiny contact shadow so it looks like it's resting on
+   the felt/rocket rather than stuck to it. The per-player token color stays
+   as the base background-color underneath, untouched. */
 .cow-token {
   position: relative;
   width: 17px;
   height: 17px;
   border-radius: 50%;
   border: 1.5px solid rgba(0, 0, 0, 0.25);
-  box-shadow: inset 0 -2px 2px rgba(0, 0, 0, 0.18);
+  background-image: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.55), transparent 46%);
+  background-blend-mode: overlay;
+  box-shadow:
+    inset -3px -3px 4px rgba(0, 0, 0, 0.28),
+    inset 2px 2px 3px rgba(255, 255, 255, 0.35),
+    0 2px 3px rgba(0, 0, 0, 0.35);
 }
 .cow-token.empty {
   background: transparent !important;
@@ -871,19 +1203,21 @@ input:focus {
   border-color: rgba(255, 255, 255, 0.3);
   box-shadow: none;
 }
-/* draggable cows: pick up and move, snap back into the cluster on release */
+/* draggable cows: pick up and move, snap back into the cluster on release;
+   release settles with the same small overshoot as rocket pieces (§3/§8). */
 .cow-token.grabbable {
   cursor: grab;
   touch-action: none;
   user-select: none;
-  transition: transform 0.16s ease;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .cow-token.grabbable.is-dragging {
   cursor: grabbing;
   transition: none;
   box-shadow:
-    inset 0 -2px 2px rgba(0, 0, 0, 0.18),
-    0 6px 12px rgba(0, 0, 0, 0.4);
+    inset -3px -3px 4px rgba(0, 0, 0, 0.28),
+    inset 2px 2px 3px rgba(255, 255, 255, 0.35),
+    0 8px 14px rgba(0, 0, 0, 0.42); /* shadow drops away from the token as it lifts */
 }
 
 /* ================================================= peeking hand rail */
@@ -928,7 +1262,9 @@ input:focus {
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  background: rgba(12, 24, 16, 0.55);
+  /* §5.5: deepened so it reads as a shadowed tray under the hand rather than
+     a translucent gray box, consistent with the store tray (§5.4). */
+  background: rgba(8, 16, 11, 0.62);
   padding: 10px 20px 16px;
   width: 100%;
   /* Hug the cards (was a tall fixed min-height) so their tops — the names —
@@ -949,7 +1285,8 @@ input:focus {
   border-radius: 10px;
   padding: 9px 11px;
   margin-left: -32px;
-  box-shadow: var(--shadow);
+  /* box-shadow comes from the physical-card recipe (§3) has-art/not(.has-art)
+     rules above — no fallback needed here, one of those always matches. */
   cursor: grab;
   user-select: none;
   touch-action: none;
@@ -957,7 +1294,7 @@ input:focus {
   flex-direction: column;
   gap: 6px;
   overflow: hidden;
-  transition: transform 0.12s ease;
+  transition: transform 0.14s ease-out;
 }
 .rail-card:first-child {
   margin-left: 0;
@@ -1203,6 +1540,20 @@ input:focus {
   opacity: 0.85;
 }
 
+/* ------------------------------------------------- card flight animation */
+/* v2 §1.5: the real card stays hidden while its FLIP ghost is in flight
+   (no double-render flash), then reappears once the ghost lands. The ghost
+   itself is a cloned DOM node, positioned/animated purely via inline style
+   and Element.animate() from app.js — this just gives it a sane baseline. */
+.flight-hidden {
+  visibility: hidden;
+}
+.flight-ghost {
+  pointer-events: none;
+  z-index: 90;
+  margin: 0;
+}
+
 /* ================================================================= card art */
 /* Art paints as a cover layer behind the card; when present, the placeholder
    chrome + text are dropped so only the art shows. pointer-events: none keeps
@@ -1312,8 +1663,16 @@ input:focus {
   #root {
     padding: 12px 12px 48px;
   }
-  .table-main {
-    gap: 8px;
+  .table-disc {
+    --disc-radius: 190px;
+  }
+  .seat-inner {
+    width: 320px;
+    gap: 6px;
+  }
+  .pad-column {
+    height: 190px;
+    min-width: 110px;
   }
   .moon-disc {
     width: 116px;
@@ -1322,5 +1681,26 @@ input:focus {
   .rail-card {
     width: 104px;
     margin-left: -40px;
+  }
+}
+
+/* ---------------------------------------------------- prefers-reduced-motion */
+/* v2 §8–§9: a free-orbiting camera is a real vection/motion-sensitivity
+   concern, not just polish — this is the one genuinely new accessibility
+   surface this redesign introduces. Manual rotate/zoom stay available (the
+   player asked for that motion themselves); everything passive or
+   programmatic is disabled or shortened. */
+@media (prefers-reduced-motion: reduce) {
+  /* Menu idle spin: render at a fixed angle instead of looping. */
+  .menu-table-viewport .table-camera {
+    animation: none;
+    transform: translateZ(-1600px) rotateX(var(--camera-pitch-default)) rotateY(0deg);
+  }
+  /* Card draw/play flight: app.js already drops the arc/translate keyframes
+     to a short opacity crossfade under this same media query (via
+     matchMedia in flyGhost) — nothing further needed here structurally, but
+     make sure a stray ghost never lingers with a long default transition. */
+  .flight-ghost {
+    transition: none;
   }
 }
