@@ -408,7 +408,13 @@ const ZOOM_MAX = 1.6;
 const ZOOM_STEP = 0.12;
 const ZOOM_DEFAULT = 0.5; // frames the whole table at a typical window size
 const CAMERA_DIST = 1500; // px; must equal --camera-dist in styles.css
-const SEAT_RADIUS = 560; // px; must equal --seat-radius in styles.css
+const SEAT_RADIUS = 620; // px; must equal --seat-radius in styles.css
+// Anything here handles its own pointer input, so a press on it must NOT also
+// start turning the table. A press on anything else the table contains — bare
+// felt, the empty part of a play area, a launch pad with no rocket on it yet —
+// turns the table. This replaces an earlier "the press must land on the disc
+// itself" rule, which made the play areas dead space you could not grab.
+const NOT_A_TABLE_GRAB = 'button, a, input, .farm, .pad-card, .cow-token, .rocket-cows, .targetable';
 // Zooming in closes in on the PLAY AREA at the near edge rather than the
 // middle of the table: past the default zoom, the table is progressively
 // shifted so the near seat sits under the camera instead of the moon.
@@ -1042,12 +1048,14 @@ function Table({ g, you, myTurn, myActionPhase, zone, onZonePick }) {
   const focusCentre = () => setTarget({ centre: 1, zoom: Math.max(targetRef.current.zoom, CENTRE_ZOOM) });
 
   // ---- spin the table by dragging the felt --------------------------------
-  // Gesture ownership: the press must land on the felt ITSELF (e.target is the
-  // disc, not a card/piece/token/farm sitting on it), so dragging a game piece
-  // never also spins the table and vice versa. e.target is used rather than
-  // currentTarget precisely because it does not change as the event bubbles.
+  // Gesture ownership: a press starts a turn unless it landed on something
+  // that handles its own input (see NOT_A_TABLE_GRAB), so dragging a card,
+  // piece or token never also turns the table and vice versa. e.target is used
+  // rather than currentTarget precisely because it does not change as the
+  // event bubbles, so .closest() sees the real element under the pointer.
   const onDiscPointerDown = (e) => {
-    if (e.button !== 0 || e.target !== discRef.current) return;
+    if (e.button !== 0) return;
+    if (e.target.closest && e.target.closest(NOT_A_TABLE_GRAB)) return;
     e.preventDefault();
     const rect = discRef.current.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;

@@ -65,24 +65,29 @@
   /* Scene geometry. Every player's section lives on this one surface, so the
      disc has to hold N seats plus the centre cluster with real clearance.
 
-     Mats lie ALONG THE RADIUS (they face the outside edge of the table, like
-     real place mats), so the mat's height runs radially and its width runs
-     tangentially. Two rules, both of which must hold or sections collide:
+     Mats lie ALONG THE RADIUS (they face the outside edge of the table), so a
+     mat's height runs radially and its width runs tangentially. Two rules,
+     both of which must hold or sections collide:
 
        inner:  seat-radius - mat-height/2   >  cluster reach   (no overlap)
        outer:  sqrt((seat-radius + mat-height/2)^2 + (mat-width/2)^2)
                                             <  disc-radius     (stays on felt)
 
-     Centre cluster is deck | moon | discard in a row with the store above, so
-     its reach from the moon's centre is:
-       north = row/2(90) + gap(16) + store(134) + its caption(16) = 256px
-       east/west = moon/2(90) + gap(14) + pile(96) = 200px
-     Mat is 472 x 300.
-       inner: 560 - 150 = 410 > 256          OK, 154px of clearance
-       outer: sqrt(710^2 + 236^2) = 748 < 900 OK, 152px of felt margin */
-  --disc-radius: 900px;
-  --seat-radius: 560px;
-  --moon-size: 180px;
+     Cluster is deck | moon | discard in a row with the store above. Its
+     furthest point is a CORNER of the store row, not the top edge:
+       store row is 443 wide x 146 tall, centred 179 above the middle
+       -> corner reach = sqrt(222^2 + 252^2) = 336px
+     The mat is 418 x 494 (the launch pad is three cards tall).
+       inner: 620 - 247 = 373 > 336            OK
+       outer: sqrt(867^2 + 209^2) = 892 < 960  OK */
+  --disc-radius: 960px;
+  --seat-radius: 620px;
+  --moon-size: 190px;
+  /* ONE card size for every card on the table — rocket pieces, the farm, the
+     deck, the discard and the store all use it, so nothing looks like a
+     different scale of object. The farm is the same card laid on its side. */
+  --card-w: 104px;
+  --card-h: 146px; /* 104 * 3.5/2.5 */
   --camera-pitch-default: 48deg; /* medium tilt: sitting at the table */
   --camera-dist: 1500px;
 }
@@ -581,11 +586,16 @@ input:focus {
   transform: translate(-50%, calc(-100% + var(--moon-size) / 2));
 }
 /* deck and discard sit either side of the moon; the store row goes above. */
+/* Height is pinned to the moon rather than left to the tallest child: the
+   .table-hub-inner translate below assumes the moon's centre sits half a moon
+   above the column's bottom edge, which is only true if the moon defines this
+   row's height. Let a pile grow taller and the moon would drift off centre. */
 .hub-row {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 14px;
+  height: var(--moon-size);
 }
 /* One per player, laid flat on the surface, fanned evenly around the table.
    transform-origin 0 0 keeps the element's corner pinned to the table centre
@@ -611,22 +621,19 @@ input:focus {
   align-items: center;
   justify-content: center;
   gap: 16px;
+  /* Deliberately no panel, tint or outline: a play area is bare felt with the
+     player's cards on it, and the coloured rule under its title is the only
+     thing marking whose section it is. The empty felt inside a section is also
+     a valid place to grab and turn the table — see the Table component, which
+     starts a turn from anything that is not itself an interactive piece. */
   padding: 12px 18px;
-  border-radius: 18px;
-  background: rgba(0, 0, 0, 0.14);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-}
-/* your own mat is lifted slightly out of the felt so it reads as "here" */
-.seat--self .seat-inner {
-  background: rgba(255, 255, 255, 0.05);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
-    0 2px 14px rgba(0, 0, 0, 0.25);
 }
 /* the launch pad gets the large portion; the farm is a single card beside it */
+/* Tall enough for a full three-card rocket with room to shuffle the pieces
+   about — this is the assembly area, so it gets the height. */
 .pad-column {
-  width: 260px;
-  height: 300px;
+  width: 220px;
+  height: 470px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -676,7 +683,7 @@ input:focus {
   gap: 12px;
 }
 .pile {
-  width: 96px;
+  width: var(--card-w);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -812,7 +819,7 @@ input:focus {
   gap: 9px;
 }
 .store-card {
-  width: 96px; /* match the deck/discard pile size */
+  width: var(--card-w); /* match every other card on the table */
   aspect-ratio: 2.5 / 3.5;
   background: var(--paper);
   border: none;
@@ -928,8 +935,6 @@ input:focus {
 .launchpad {
   height: 100%;
   width: 100%;
-  border-radius: 12px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -948,7 +953,7 @@ input:focus {
    footprint as any other card on the table. */
 .farm {
   flex: none;
-  width: 160px;
+  width: var(--card-h); /* the same card as the others, laid on its side */
   aspect-ratio: 3.5 / 2.5;
   border-radius: 8px;
   overflow: hidden;
@@ -1015,9 +1020,8 @@ input:focus {
 }
 .pad-card {
   position: relative;
-  /* fixed rather than % of the pad: the pad is now a fixed-size patch of
-     table, and three of these stack to 288px inside its 300px height. */
-  height: 96px;
+  /* Same card as everything else on the table; three stack inside the pad. */
+  height: var(--card-h);
   width: auto;
   aspect-ratio: 2.5 / 3.5;
   background: var(--paper);
