@@ -46,8 +46,50 @@
   --radius-sm: 9px;
   --shadow: 0 8px 22px rgba(12, 24, 16, 0.28);
   --shadow-sm: 0 3px 9px rgba(12, 24, 16, 0.2);
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
   --font-head: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif;
   --font-body: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* ---------- The 3D table scene ---------- */
+  /* Wood rim + felt weave, so the table reads as a physical object. */
+  --wood-light: #8a6039;
+  --wood-mid: #6b4a2f;
+  --wood-dark: #45301e;
+  --felt-mid: #2e5540;
+  --felt-weave-light: rgba(255, 255, 255, 0.05);
+  --felt-weave-dark: rgba(0, 0, 0, 0.08);
+  --space-black: #070a10;
+  --star: rgba(255, 255, 255, 0.85);
+  --star-dim: rgba(255, 255, 255, 0.4);
+
+  /* Scene geometry. Every player's section lives on this one surface, so the
+     disc has to hold N seats plus the centre cluster with real clearance.
+
+     Mats lie ALONG THE RADIUS (they face the outside edge of the table), so a
+     mat's height runs radially and its width runs tangentially. Two rules,
+     both of which must hold or sections collide:
+
+       inner:  seat-radius - mat-height/2   >  cluster reach   (no overlap)
+       outer:  sqrt((seat-radius + mat-height/2)^2 + (mat-width/2)^2)
+                                            <  disc-radius     (stays on felt)
+
+     Cluster is deck | moon | discard in a row with the store above. Its
+     furthest point is a CORNER of the store row, not the top edge:
+       store row is 443 wide x 146 tall, centred 179 above the middle
+       -> corner reach = sqrt(222^2 + 252^2) = 336px
+     The mat is 418 x 494 (the launch pad is three cards tall).
+       inner: 620 - 247 = 373 > 336            OK
+       outer: sqrt(867^2 + 209^2) = 892 < 960  OK */
+  --disc-radius: 960px;
+  --seat-radius: 620px;
+  --moon-size: 190px;
+  /* ONE card size for every card on the table — rocket pieces, the farm, the
+     deck, the discard and the store all use it, so nothing looks like a
+     different scale of object. The farm is the same card laid on its side. */
+  --card-w: 104px;
+  --card-h: 146px; /* 104 * 3.5/2.5 */
+  --camera-pitch-default: 48deg; /* medium tilt: sitting at the table */
+  --camera-dist: 1500px;
 }
 
 /* ------------------------------------------------------------------ base */
@@ -64,10 +106,17 @@ body {
   color: var(--ink);
   line-height: 1.45;
   min-height: 100vh;
-  /* One continuous felt surface — soft vignette, no busy starfield */
+  /* Deep space: the table is a lit object floating in it. Two sparse
+     radial-gradient "star" layers instead of an image — no new asset, and
+     they cost nothing to paint. */
   background:
-    radial-gradient(ellipse at 50% 22%, var(--felt-top) 0%, var(--felt-bot) 62%, var(--felt-edge) 100%)
-      fixed;
+    radial-gradient(1.6px 1.6px at 18% 22%, var(--star) 50%, transparent 51%),
+    radial-gradient(1.2px 1.2px at 74% 14%, var(--star-dim) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 42% 68%, var(--star-dim) 50%, transparent 51%),
+    radial-gradient(1.3px 1.3px at 88% 74%, var(--star) 50%, transparent 51%),
+    radial-gradient(1.1px 1.1px at 8% 82%, var(--star-dim) 50%, transparent 51%),
+    radial-gradient(1.4px 1.4px at 62% 40%, var(--star-dim) 50%, transparent 51%),
+    radial-gradient(ellipse at 50% 34%, #16203a 0%, #0b1120 55%, var(--space-black) 100%) fixed;
 }
 
 #root {
@@ -87,6 +136,7 @@ h3 {
 
 /* App title */
 #root > div > h1:first-child {
+  font-family: var(--font-display);
   color: var(--on-felt);
   text-align: center;
   font-size: clamp(1.6rem, 3.6vw, 2.3rem);
@@ -142,13 +192,11 @@ button.subtle {
 .respond-panel .cownter-btn {
   background: var(--accent);
 }
-.card-actions button.recycle,
 .hud-actions button:first-child {
   background: var(--neutral);
 }
 /* On paper panels, subtle buttons need dark ink */
 .modal button.subtle,
-.prompt button.subtle,
 .respond-panel button.subtle {
   color: var(--ink) !important;
   border-color: var(--paper-line);
@@ -293,10 +341,15 @@ input:focus {
 /* ==================================================== in-game: no-scroll */
 /* The whole table fits the viewport; nothing scrolls the page. Home/lobby
    are unaffected. */
+/* In game the table runs FULL BLEED: no page padding, no max width, so the
+   felt reaches every edge of the window. Everything that used to sit in a bar
+   above or below it (turn info, phase hint, activity log, hand) now floats
+   over the table instead — see .hud / .draw-hint / .log / .hand-rail below. */
 #root:has(.app--game) {
   height: 100dvh;
   overflow: hidden;
-  padding: 4px 10px 0;
+  padding: 0;
+  max-width: none;
 }
 .app--game {
   height: 100%;
@@ -304,27 +357,38 @@ input:focus {
   flex-direction: column;
   overflow: hidden;
 }
+/* The title belongs to the home and lobby screens; in game it would just be a
+   bar across the top of the table. */
 #root > .app--game > h1:first-child {
-  font-size: 1rem;
-  font-weight: 500;
-  opacity: 0.75;
-  margin: 2px 0 4px;
+  display: none;
 }
 .app--game .game {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  position: relative; /* the floating HUD / hint / log anchor to this */
   overflow: hidden;
-  padding-bottom: 100px; /* room for the peeking hand rail (matches its peek height) */
 }
+/* Turn info and the Do-nothing / End-turn buttons, floated across the top of
+   the felt. pointer-events are handed back to the controls themselves so the
+   strip never swallows a drag on the table underneath it. */
 .game > .hud {
-  flex: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 15;
+  padding: 8px 14px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(4, 8, 16, 0.55), transparent);
 }
+.game > .hud button,
+.game > .hud .hud-who {
+  pointer-events: auto;
+}
+/* The table now owns the whole game area. */
 .game > .table {
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
 }
 
 /* --------------------------------------------------------- heads-up bar */
@@ -379,69 +443,344 @@ input:focus {
 .table {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 6px 8px;
   overflow: hidden;
   position: relative;
 }
+/* Floated over the felt, under the HUD. It no longer needs to reserve a row:
+   nothing below it can shift, because the table fills the whole area. */
 .draw-hint {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  right: 0;
+  z-index: 15;
+  pointer-events: none;
   text-align: center;
   color: var(--on-felt);
   font-weight: 700;
   font-family: var(--font-head);
   font-size: 0.9rem;
-  opacity: 0.9;
-  /* always reserve one line so the bar never collapses and shifts the table */
-  min-height: 1.3rem;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75);
+  opacity: 0.95;
 }
 
-/* The main area: a big full-height launch pad on the left, and a right column
-   holding the shared piles (deck/moon/store) on top with the farm below. */
-.table-main {
+/* ============================================================ 3D table scene
+   THE GEOMETRY, in one place, because getting this wrong is what broke the
+   first attempt:
+
+     .table-viewport   the window; owns `perspective`
+       .table-camera   TILT ONLY - rotateX(pitch) leans the table away from
+                       the viewer. This is the only 3D rotation in the scene.
+         .table-disc   SPIN - a plain 2D rotate(), i.e. rotation about the
+                       axis perpendicular to the table's own surface. This is
+                       the lazy-susan spin.
+           children    everything on the table
+
+   Two properties fall out of this and both are load-bearing:
+
+   1. `.table-disc` does NOT set `transform-style: preserve-3d`, so all of its
+      descendants are FLATTENED INTO THE DISC'S PLANE. That is what makes
+      cards, farms, pads and piles lie flat on the tabletop like real cards
+      instead of standing up as billboards. Adding preserve-3d here would
+      re-break exactly that.
+   2. Because the spin is applied inside the tilt (child of .table-camera,
+      not a sibling), it happens in the table's own local space. A rotate()
+      here is perpendicular-axis rotation no matter what the pitch is, so the
+      table always turns like a record on a turntable and never tumbles
+      edge-over-edge. */
+.table-viewport {
   flex: 1;
   min-height: 0;
-  display: flex;
-  gap: 14px;
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  perspective: var(--camera-dist);
+  /* The vanishing point MUST sit on the same point as .table-camera's anchor
+     (which is 50%/50% of this box). When it did not, the whole scene slid down
+     as you zoomed in — the camera's own origin was being scaled away from the
+     vanishing point — so the thing you had focused on drifted off centre by
+     more the closer you got. Framing is handled by --focus-lift instead, which
+     is a screen-space nudge and so is immune to that. */
+  perspective-origin: 50% 50%;
 }
-/* LEFT column: the big launch pad. flex:2 so the rocket has a roomy assembly
-   area (room to move pieces around manually in a future set). */
-.pad-column {
-  flex: 1.3;
-  min-width: 150px;
-  height: 100%;
+.table-camera {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  /* --focus-lift is a SCREEN-space nudge (it precedes the 3D rotation, so it
+     is not affected by the tilt); app.js ramps it in with the zoom focus to
+     keep the play area centred rather than low in frame. */
+  transform: translateY(var(--focus-lift, 0px)) translateZ(var(--camera-z, 0px))
+    rotateX(var(--camera-pitch, var(--camera-pitch-default)));
+}
+/* The table itself. rotate() = the lazy-susan spin (see the note above). */
+.table-disc {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(var(--disc-radius) * 2);
+  height: calc(var(--disc-radius) * 2);
+  margin: calc(var(--disc-radius) * -1) 0 0 calc(var(--disc-radius) * -1);
+  border-radius: 50%;
+  /* rotate = the lazy-susan spin. The translate after it shifts the whole
+     table so the FOCUS POINT — the play area at the near edge — sits under
+     the camera instead of the table's centre; app.js ramps it in as you zoom
+     past the default, so zooming closes in on the play area, not the moon.
+     Order matters: `rotate() translate()` translates in the table's own
+     unrotated frame, which is why app.js can pass a plain table-space point. */
+  transform: rotate(var(--table-spin, 0deg)) translate(var(--focus-x, 0px), var(--focus-y, 0px));
+  cursor: grab;
+  touch-action: none;
+  background:
+    repeating-linear-gradient(45deg, var(--felt-weave-light) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, var(--felt-weave-dark) 0 1px, transparent 1px 3px),
+    radial-gradient(circle at 50% 42%, #3a684e 0%, var(--felt-mid) 52%, var(--felt-bot) 84%, var(--felt-edge) 100%);
+  background-blend-mode: overlay, overlay, normal;
+  /* wood rim, built from spread-only rings so it hugs the circle exactly */
+  box-shadow:
+    0 0 0 14px var(--wood-mid),
+    0 0 0 20px var(--wood-light),
+    0 0 0 26px var(--wood-dark),
+    0 0 60px 30px rgba(0, 0, 0, 0.45);
+}
+.table-disc.is-spinning {
+  cursor: grabbing;
+}
+/* Centre cluster: moon dead centre, deck + discard next to it, rocket store
+   laid out beside those. Column order is store -> piles -> moon.
+
+   Two nested elements, because two different things happen here:
+   .table-hub is a zero-size anchor pinned to the table's exact centre, and
+   carries the counter-spin; .table-hub-inner is the actual column, shifted so
+   the MOON'S centre (not the column's) lands on that anchor. Rotating the
+   anchor therefore pivots the whole cluster about the moon, which keeps the
+   moon dead centre while the piles stay upright and readable as the table
+   turns. The player mats deliberately do NOT do this (see .seat-inner) — a
+   mat belongs to one player and faces their edge, whereas the deck, discard
+   and store are shared by everyone, so they stay legible from every seat. */
+.table-hub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  transform: rotate(calc(-1 * var(--table-spin, 0deg)));
+}
+.table-hub-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: flex;
-  align-items: stretch;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  /* The moon is the tallest thing in .hub-row and is centred in it, and the
+     row is the column's last child — so "up by the column's height, back down
+     by half a moon" lands the MOON'S centre exactly on the table's centre. */
+  transform: translate(-50%, calc(-100% + var(--moon-size) / 2));
+}
+/* deck and discard sit either side of the moon; the store row goes above. */
+/* Height is pinned to the moon rather than left to the tallest child: the
+   .table-hub-inner translate below assumes the moon's centre sits half a moon
+   above the column's bottom edge, which is only true if the moon defines this
+   row's height. Let a pile grow taller and the moon would drift off centre. */
+.hub-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  height: var(--moon-size);
+}
+/* One per player, laid flat on the surface, fanned evenly around the table.
+   transform-origin 0 0 keeps the element's corner pinned to the table centre
+   so `rotate -> translateY` reads as "spin out to seat angle, then walk to
+   the rim"; the trailing translate re-centres the seat box on that point.
+   Seat 0 is always YOU (app.js rotates the player list), and seat 0 is at
+   angle 0 = the near edge, upright. Spinning the table by -angle brings any
+   other seat to that same upright near position, exactly like turning a real
+   lazy susan toward yourself. */
+.seat {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: 0 0;
+  transform: rotate(var(--seat-angle, 0deg)) translateY(var(--seat-radius)) translate(-50%, -50%);
+}
+/* No counter-rotation: the mat inherits its seat's angle, so it always faces
+   the OUTSIDE EDGE of the table — right-way-up for the player sitting there,
+   like a real place mat. Turning the table brings a mat round to the near
+   edge, where it reads upright for you. */
+.seat-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  /* Deliberately no panel, tint or outline: a play area is bare felt with the
+     player's cards on it, and the coloured rule under its title is the only
+     thing marking whose section it is. The empty felt inside a section is also
+     a valid place to grab and turn the table — see the Table component, which
+     starts a turn from anything that is not itself an interactive piece. */
+  padding: 12px 18px;
+}
+/* Opponent floating hands: their own branch off .table-camera, NOT nested in
+   .table-disc/.seat with everything else. See the long comment on this in
+   the Table component (app.js) for why — short version: .table-disc is
+   deliberately transform-style:flat so cards/pieces/farms lie FLAT on the
+   felt, and a flat ancestor forces EVERY descendant flat too, no matter how
+   deep, so a standing (rotateX'd) card genuinely cannot live inside it. This
+   layer replicates .table-disc's own spin/pan so it stays locked to the
+   table as it turns and zooms. */
+.floating-hands-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  transform: rotate(var(--table-spin, 0deg)) translate(var(--focus-x, 0px), var(--focus-y, 0px));
+}
+/* One per opponent — replicates .seat's own rotate(seat-angle)
+   translateY(seat-radius) placement: pushed well out past the mat (clear of
+   the table's rim, --disc-radius is 960px vs --seat-radius's 620px) so the
+   hand floats behind the player rather than sitting on top of them, and
+   lifted with translateZ — a real move along the table's own "up off the
+   felt" axis, not a screen-space nudge, so it stays correctly up in the air
+   at every zoom/spin rather than just a flat offset. */
+.fh-anchor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  transform-origin: 0 0;
+  transform: rotate(var(--seat-angle, 0deg)) translateY(calc(var(--seat-radius) + 460px)) translateZ(80px);
+}
+/* An opponent's hand, floating well off the edge of the table behind their
+   play area — as if they were physically holding it up there, standing on
+   its bottom edge (see .floating-hand's rotateX) rather than lying flat like
+   every other card on the felt. Always visible (not a hover reveal), so the
+   table constantly feels populated; see FloatingHand in app.js. Only
+   actually CLICKABLE when it's a legal target (.targetable, same convention
+   as every other target zone on the table — .farm/.pad-card/.rocket-cows),
+   so it can't eat a stray click the rest of the time. */
+.floating-hand-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
+  transform-style: preserve-3d;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+.floating-hand-wrap.targetable {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.floating-hand {
+  position: relative;
+  width: var(--card-w);
+  height: calc(var(--card-w) * 1.4); /* the shared 2.5:3.5 card ratio */
+  transform-style: preserve-3d;
+  transform-origin: bottom center;
+  /* Tips the whole fan up off the felt, standing on its bottom (short) edge,
+     leaning back only enough that the faces stay readable rather than
+     edge-on to the camera. NEEDS A LIVE LOOK: if it leans the wrong way
+     (into the table instead of up and toward the viewer), flip the sign to
+     80deg. */
+  transform: rotateX(-80deg);
+}
+/* Face-down only — a hand's contents are hidden (spec 7.3), so this can never
+   show anything but backs. Full card size (--card-w), same as every other
+   card on the table. Real deck-back art via inline style (see FloatingHand
+   in app.js), falling back to the same striped pattern as the deck when art
+   isn't loaded. Fanned by index around the stack's own centre (`--i` vs
+   `--n`, set inline per card), rotated from the bottom like cards actually
+   held in a hand — now that the fan itself stands up, this reads as a
+   real fanned hand of cards rather than cards splayed flat on the felt. */
+.fh-card {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: var(--card-w);
+  aspect-ratio: 2.5 / 3.5;
+  border-radius: 9px;
+  background: repeating-linear-gradient(45deg, #3a5a48, #3a5a48 7px, #315041 7px, #315041 14px);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-sm);
+  transform-origin: bottom center;
+  transform: translateX(calc((var(--i) - (var(--n) - 1) / 2) * 34px - 50%))
+    rotate(calc((var(--i) - (var(--n) - 1) / 2) * 6deg));
+}
+.floating-hand-wrap.targetable .fh-card {
+  box-shadow: 0 0 0 2.5px var(--select), var(--shadow-sm);
+}
+.floating-hand-label {
+  font-family: var(--font-head);
+  font-size: 0.7rem;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 3px 10px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+/* the launch pad gets the large portion; the farm is a single card beside it */
+/* Tall enough for a full three-card rocket with room to shuffle the pieces
+   about — this is the assembly area, so it gets the height. */
+.pad-column {
+  width: 220px;
+  height: 470px;
+  display: flex;
+  align-items: center;
   justify-content: center;
 }
-/* MIDDLE column: moon above the farm (gets the extra room). */
-.center-column {
-  flex: 1.6;
-  min-width: 0;
-  min-height: 0;
+/* Camera controls: screen-anchored HUD, deliberately OUTSIDE the 3D scene. */
+.camera-hud {
+  position: absolute;
+  right: 14px;
+  bottom: 22px;
+  z-index: 20;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 12px;
+  gap: 6px;
 }
-.center-column .play-row {
-  width: 100%;
-  flex: 1;
-  min-height: 0;
+.camera-hud button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  border-radius: 50%;
+  background: rgba(10, 24, 16, 0.55);
+  color: var(--on-felt);
+  border: 1px solid var(--felt-hair);
 }
-/* RIGHT column: deck + discard on top, rocket store below (with a gap between). */
-.piles-column {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 30px;
+.camera-hud button:hover {
+  background: rgba(10, 24, 16, 0.8);
+}
+.camera-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+  z-index: 20;
+  color: var(--on-felt-dim);
+  font-size: 0.72rem;
+  pointer-events: none;
 }
 .piles {
   display: flex;
   gap: 12px;
 }
 .pile {
-  width: 96px;
+  width: var(--card-w);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -530,8 +869,8 @@ input:focus {
 
 /* moon: a soft disc, cows as tokens */
 .moon-disc {
-  width: 220px;
-  height: 220px;
+  width: var(--moon-size);
+  height: var(--moon-size);
   border-radius: 50%;
   background: radial-gradient(circle at 38% 32%, #f2ecd6, #ddd0a2 60%, #c3b586);
   box-shadow:
@@ -555,7 +894,7 @@ input:focus {
   flex-wrap: wrap;
   gap: 3px;
   justify-content: center;
-  max-width: 170px;
+  max-width: calc(var(--moon-size) - 50px);
 }
 .moon-n {
   font-weight: 700;
@@ -570,13 +909,14 @@ input:focus {
   align-items: center;
   gap: 6px;
 }
+/* 1x4: a single row of face-up store cards laid out beside the piles. */
 .store-cards2 {
   display: grid;
-  grid-template-columns: repeat(2, auto);
+  grid-template-columns: repeat(4, auto);
   gap: 9px;
 }
 .store-card {
-  width: 96px; /* match the deck/discard pile size */
+  width: var(--card-w); /* match every other card on the table */
   aspect-ratio: 2.5 / 3.5;
   background: var(--paper);
   border: none;
@@ -619,41 +959,18 @@ input:focus {
 }
 
 /* ------------------------------------------------ player area (on felt) */
-.play-row {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  flex: 1;
-  min-height: 0;
-}
-.arrow {
-  align-self: center;
-  background: transparent;
-  border: 1.5px solid var(--felt-hair);
-  color: var(--on-felt);
-  border-radius: 50%;
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  font-size: 1.05rem;
-  flex: none;
-}
-.arrow:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-}
 /* Borderless: the player area is transparent — content floats on the felt,
    with a thin colour underline under the title showing whose area it is. */
+/* On the table this is just the farm plus its label, sitting beside the pad. */
 .player-area {
-  flex: 1;
-  min-height: 0;
+  flex: none;
   background: transparent;
-  padding: 4px 10px 10px;
+  padding: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  overflow: hidden;
+  justify-content: center;
+  gap: 7px;
 }
 .player-area > .area-title {
   flex: none;
@@ -706,21 +1023,23 @@ input:focus {
 }
 /* Farm: a poker card laid on its side (landscape). Sized to fully fit below the
    area title so its rounded corners aren't clipped by the player area. */
+/* Farm: one standard playing card, laid on its side (the farm art is
+   landscape, so a portrait crop would cut the barn and windmill off). Same
+   footprint as any other card on the table. */
 .farm {
   flex: none;
-  width: 100%;
-  max-width: 380px;
-  max-height: calc(100% - 52px);
+  width: var(--card-h); /* the same card as the others, laid on its side */
   aspect-ratio: 3.5 / 2.5;
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
-  padding: 10px;
+  padding: 6px;
   text-align: center;
   background: transparent;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  box-shadow: var(--shadow-sm);
 }
 .farm.herdable {
   cursor: pointer;
@@ -776,7 +1095,8 @@ input:focus {
 }
 .pad-card {
   position: relative;
-  height: 31%;
+  /* Same card as everything else on the table; three stack inside the pad. */
+  height: var(--card-h);
   width: auto;
   aspect-ratio: 2.5 / 3.5;
   background: var(--paper);
@@ -916,6 +1236,13 @@ input:focus {
   padding: 5px 18px;
   border-radius: 10px 10px 0 0;
 }
+/* A card that's allowed to target YOURSELF (see PLAYER_TARGET_EFFECTS in
+   app.js) turns your own hand tab into that target — the self-targeting
+   counterpart to clicking an opponent's floating hand. */
+.hand-tab.targetable {
+  cursor: pointer;
+  box-shadow: 0 0 0 2.5px var(--select);
+}
 .play-hint {
   background: var(--accent);
   color: #fff;
@@ -1052,18 +1379,11 @@ input:focus {
 }
 
 /* ------------------------------------------------ prompts / respond panel */
-.prompt p {
-  margin: 0 0 10px;
-  font-weight: 700;
-}
 .choices {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-}
-.prompt .choices button {
-  background: var(--neutral);
 }
 .respond-panel {
   background: var(--paper);
@@ -1191,8 +1511,24 @@ input:focus {
   overflow-y: auto;
   font-size: 0.84rem;
 }
+/* Top-left over the felt, below the HUD. It sits at the TOP rather than the
+   bottom because <details> expands downward — anchored to the bottom it grew
+   up over the camera hint, and open it would have run off the window. */
 .app--game .log {
-  flex: none;
+  position: absolute;
+  left: 12px;
+  top: 52px;
+  z-index: 16;
+  width: min(320px, 30vw);
+  padding: 0;
+}
+.app--game .log summary {
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75);
+}
+.app--game .log[open] {
+  background: rgba(4, 8, 16, 0.72);
+  border-radius: var(--radius-sm);
+  padding: 2px 10px;
 }
 .app--game .log[open] .log-feed {
   max-height: 26vh;
@@ -1311,9 +1647,6 @@ input:focus {
 @media (max-width: 640px) {
   #root {
     padding: 12px 12px 48px;
-  }
-  .table-main {
-    gap: 8px;
   }
   .moon-disc {
     width: 116px;
