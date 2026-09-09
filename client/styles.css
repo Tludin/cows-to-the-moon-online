@@ -192,13 +192,11 @@ button.subtle {
 .respond-panel .cownter-btn {
   background: var(--accent);
 }
-.card-actions button.recycle,
 .hud-actions button:first-child {
   background: var(--neutral);
 }
 /* On paper panels, subtle buttons need dark ink */
 .modal button.subtle,
-.prompt button.subtle,
 .respond-panel button.subtle {
   color: var(--ink) !important;
   border-color: var(--paper-line);
@@ -628,6 +626,111 @@ input:focus {
      starts a turn from anything that is not itself an interactive piece. */
   padding: 12px 18px;
 }
+/* Opponent floating hands: their own branch off .table-camera, NOT nested in
+   .table-disc/.seat with everything else. See the long comment on this in
+   the Table component (app.js) for why — short version: .table-disc is
+   deliberately transform-style:flat so cards/pieces/farms lie FLAT on the
+   felt, and a flat ancestor forces EVERY descendant flat too, no matter how
+   deep, so a standing (rotateX'd) card genuinely cannot live inside it. This
+   layer replicates .table-disc's own spin/pan so it stays locked to the
+   table as it turns and zooms. */
+.floating-hands-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  transform: rotate(var(--table-spin, 0deg)) translate(var(--focus-x, 0px), var(--focus-y, 0px));
+}
+/* One per opponent — replicates .seat's own rotate(seat-angle)
+   translateY(seat-radius) placement: pushed well out past the mat (clear of
+   the table's rim, --disc-radius is 960px vs --seat-radius's 620px) so the
+   hand floats behind the player rather than sitting on top of them, and
+   lifted with translateZ — a real move along the table's own "up off the
+   felt" axis, not a screen-space nudge, so it stays correctly up in the air
+   at every zoom/spin rather than just a flat offset. */
+.fh-anchor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  transform-origin: 0 0;
+  transform: rotate(var(--seat-angle, 0deg)) translateY(calc(var(--seat-radius) + 460px)) translateZ(80px);
+}
+/* An opponent's hand, floating well off the edge of the table behind their
+   play area — as if they were physically holding it up there, standing on
+   its bottom edge (see .floating-hand's rotateX) rather than lying flat like
+   every other card on the felt. Always visible (not a hover reveal), so the
+   table constantly feels populated; see FloatingHand in app.js. Only
+   actually CLICKABLE when it's a legal target (.targetable, same convention
+   as every other target zone on the table — .farm/.pad-card/.rocket-cows),
+   so it can't eat a stray click the rest of the time. */
+.floating-hand-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
+  transform-style: preserve-3d;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+.floating-hand-wrap.targetable {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.floating-hand {
+  position: relative;
+  width: var(--card-w);
+  height: calc(var(--card-w) * 1.4); /* the shared 2.5:3.5 card ratio */
+  transform-style: preserve-3d;
+  transform-origin: bottom center;
+  /* Tips the whole fan up off the felt, standing on its bottom (short) edge,
+     leaning back only enough that the faces stay readable rather than
+     edge-on to the camera. NEEDS A LIVE LOOK: if it leans the wrong way
+     (into the table instead of up and toward the viewer), flip the sign to
+     80deg. */
+  transform: rotateX(-80deg);
+}
+/* Face-down only — a hand's contents are hidden (spec 7.3), so this can never
+   show anything but backs. Full card size (--card-w), same as every other
+   card on the table. Real deck-back art via inline style (see FloatingHand
+   in app.js), falling back to the same striped pattern as the deck when art
+   isn't loaded. Fanned by index around the stack's own centre (`--i` vs
+   `--n`, set inline per card), rotated from the bottom like cards actually
+   held in a hand — now that the fan itself stands up, this reads as a
+   real fanned hand of cards rather than cards splayed flat on the felt. */
+.fh-card {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: var(--card-w);
+  aspect-ratio: 2.5 / 3.5;
+  border-radius: 9px;
+  background: repeating-linear-gradient(45deg, #3a5a48, #3a5a48 7px, #315041 7px, #315041 14px);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-sm);
+  transform-origin: bottom center;
+  transform: translateX(calc((var(--i) - (var(--n) - 1) / 2) * 34px - 50%))
+    rotate(calc((var(--i) - (var(--n) - 1) / 2) * 6deg));
+}
+.floating-hand-wrap.targetable .fh-card {
+  box-shadow: 0 0 0 2.5px var(--select), var(--shadow-sm);
+}
+.floating-hand-label {
+  font-family: var(--font-head);
+  font-size: 0.7rem;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 3px 10px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
 /* the launch pad gets the large portion; the farm is a single card beside it */
 /* Tall enough for a full three-card rocket with room to shuffle the pieces
    about — this is the assembly area, so it gets the height. */
@@ -637,12 +740,6 @@ input:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-.piles-column {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
 }
 /* Camera controls: screen-anchored HUD, deliberately OUTSIDE the 3D scene. */
 .camera-hud {
@@ -862,28 +959,6 @@ input:focus {
 }
 
 /* ------------------------------------------------ player area (on felt) */
-.play-row {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  flex: 1;
-  min-height: 0;
-}
-.arrow {
-  align-self: center;
-  background: transparent;
-  border: 1.5px solid var(--felt-hair);
-  color: var(--on-felt);
-  border-radius: 50%;
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  font-size: 1.05rem;
-  flex: none;
-}
-.arrow:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-}
 /* Borderless: the player area is transparent — content floats on the felt,
    with a thin colour underline under the title showing whose area it is. */
 /* On the table this is just the farm plus its label, sitting beside the pad. */
@@ -1161,6 +1236,13 @@ input:focus {
   padding: 5px 18px;
   border-radius: 10px 10px 0 0;
 }
+/* A card that's allowed to target YOURSELF (see PLAYER_TARGET_EFFECTS in
+   app.js) turns your own hand tab into that target — the self-targeting
+   counterpart to clicking an opponent's floating hand. */
+.hand-tab.targetable {
+  cursor: pointer;
+  box-shadow: 0 0 0 2.5px var(--select);
+}
 .play-hint {
   background: var(--accent);
   color: #fff;
@@ -1297,18 +1379,11 @@ input:focus {
 }
 
 /* ------------------------------------------------ prompts / respond panel */
-.prompt p {
-  margin: 0 0 10px;
-  font-weight: 700;
-}
 .choices {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-}
-.prompt .choices button {
-  background: var(--neutral);
 }
 .respond-panel {
   background: var(--paper);
@@ -1572,9 +1647,6 @@ input:focus {
 @media (max-width: 640px) {
   #root {
     padding: 12px 12px 48px;
-  }
-  .table-main {
-    gap: 8px;
   }
   .moon-disc {
     width: 116px;

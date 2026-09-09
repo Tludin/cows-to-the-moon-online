@@ -125,10 +125,12 @@ describe('lobby flow', () => {
 
   it('promotes a new host when the host leaves the lobby', async () => {
     const [host, guest] = await makeRoom(2);
-    const m = guest!.mark();
     host.close();
-    const update = await guest!.waitFor(m, (msg) => msg.type === 'roomUpdate');
-    assert.equal((update.players as unknown[]).length, 1);
+    // Match on the post-disconnect shape (1 player), not just "the next
+    // roomUpdate": the join broadcast that seated the guest can still be
+    // in flight to the guest's socket at this point, and a plain "first
+    // roomUpdate after now" wait can catch that stale 2-player one instead.
+    const update = await guest!.waitFor(0, (msg) => msg.type === 'roomUpdate' && (msg.players as unknown[]).length === 1);
     assert.equal(update.hostId, 'p1'); // guest was re-seated as p1 and is now host
     guest!.close();
   });
@@ -184,6 +186,22 @@ async function playFullGame(playerCount: number, seed: number): Promise<string> 
 async function runBots(clients: TestClient[]): Promise<string> {
   const byId = new Map(clients.map((c) => [c.playerId!, c]));
 
+  // Sends one action from `actor` and, on success, waits for EVERY client to
+  // have processed the resulting broadcast — not just the actor. `actor
+  // .action()` alone only awaits the actor's own socket, so the loop's shared
+  // reference point (clients[0]'s lastView, read every iteration below) could
+  // still be one broadcast stale when the actor isn't clients[0]. That race
+  // let the harness pick the wrong "current" player and misreport a real
+  // player's turn as having no legal action.
+  async function actAndSync(actor: TestClient, msg: Record<string, unknown>): Promise<ServerMsg> {
+    const marks = clients.map((c) => c.mark());
+    const res = await actor.action(msg);
+    if (res.type === 'gameStateUpdate') {
+      await Promise.all(clients.map((c, i) => c.waitForType(marks[i]!, 'gameStateUpdate')));
+    }
+    return res;
+  }
+
   for (let step = 0; step < 6000; step++) {
     if (clients.every((c) => c.gameOver)) break;
     const view = clients[0]!.lastView as any;
@@ -191,7 +209,7 @@ async function runBots(clients: TestClient[]): Promise<string> {
     if (view.pending) {
       // Everyone always passes on Cownter opportunities.
       const responder = byId.get(view.pending.toRespond[0])!;
-      const res = await responder.action({ type: 'respondToPending', response: 'pass' });
+      const res = await actAndSync(responder, { type: 'respondToPending', response: 'pass' });
       assert.notEqual(res.type, 'errorMessage', `respond failed: ${res.text}`);
       continue;
     }
@@ -202,7 +220,7 @@ async function runBots(clients: TestClient[]): Promise<string> {
 
     if (view.turn.phase === 'draw') {
       const picks = me.hand.length === 0 ? [] : [{ source: 'deck' }, { source: 'deck' }];
-      const res = await actor.action({ type: 'drawCards', picks });
+      const res = await actAndSync(actor, { type: 'drawCards', picks });
       assert.notEqual(res.type, 'errorMessage', `draw failed: ${res.text}`);
       continue;
     }
@@ -223,7 +241,7 @@ async function runBots(clients: TestClient[]): Promise<string> {
 
     let acted = false;
     for (const cand of candidates) {
-      const res = await actor.action(cand);
+      const res = await actAndSync(actor, cand);
       if (res.type === 'gameStateUpdate') {
         acted = true;
         break;
