@@ -1,0 +1,381 @@
+{
+  "status": "playing",
+  "you": "p1",
+  "players": [
+    {
+      "id": "p1",
+      "name": "Bessie",
+      "connected": true,
+      "inactive": false,
+      "farm": 6,
+      "moon": 0,
+      "rocket": {
+        "pieces": [
+          {
+            "instanceId": "c18",
+            "cardId": "heavily_improvised_bottom",
+            "name": "Heavily Improvised Rocket Bottom",
+            "type": "rocketPiece",
+            "text": "Rocket piece: Heavily Improvised bottom.",
+            "effect": null,
+            "params": null,
+            "pieceType": "heavily_improvised",
+            "part": "bottom"
+          },
+          {
+            "instanceId": "c3",
+            "cardId": "nasa_import_middle",
+            "name": "Nasa Import Rocket Middle",
+            "type": "rocketPiece",
+            "text": "Rocket piece: Nasa Import middle.",
+            "effect": null,
+            "params": null,
+            "pieceType": "nasa_import",
+            "part": "middle"
+          }
+        ],
+        "cows": 4,
+        "complete": false,
+        "capacity": 4
+      },
+      "hand": [
+        {
+          "instanceId": "c30",
+          "cardId": "wind",
+          "name": "Wind",
+          "type": "event",
+          "text": "Trade hands with any other player.",
+          "effect": "swapHands",
+          "params": null,
+          "pieceType": null,
+          "part": null
+        },
+        {
+          "instanceId": "c5",
+          "cardId": "nasa_import_bottom",
+          "name": "Nasa Import Rocket Bottom",
+          "type": "rocketPiece",
+          "text": "Rocket piece: Nasa Import bottom.",
+          "effect": null,
+          "params": null,
+          "pieceType": "nasa_import",
+          "part": "bottom"
+        },
+        {
+          "instanceId": "c25",
+          "cardId": "cow_wrangler",
+          "name": "Cow Wrangler",
+          "type": "event",
+          "text": "Return all cows in a player's rocket to that player's farm. Target any player with at least 1 cow in their rocket, or no one.",
+          "effect": "returnRocketCowsToFarm",
+          "params": null,
+          "pieceType": null,
+          "part": null
+        },
+        {
+          "instanceId": "c27",
+          "cardId": "rocket_thief",
+          "name": "Rocket Thief",
+          "type": "event",
+          "text": "Take any rocket piece in play into your hand.",
+          "effect": "stealRocketPiece",
+          "params": null,
+          "pieceType": null,
+          "part": null
+        },
+        {
+          "instanceId": "c10",
+          "cardId": "farmmade_middle",
+          "name": "Farmmade Rocket Middle",
+          "type": "rocketPiece",
+          "text": "Rocket piece: Farmmade middle.",
+          "effect": null,
+          "params": null,
+          "pieceType": "farmmade",
+          "part": "middle"
+        },
+        {
+          "instanceId": "c15",
+          "cardId": "heavily_improvised_middle",
+          "name": "Heavily Improvised Rocket Middle",
+          "type": "rocketPiece",
+          "text": "Rocket piece: Heavily Improvised middle.",
+          "effect": null,
+          "params": null,
+          "pieceType": "heavily_improvised",
+          "part": "middle"
+        }
+      ],
+      "handCount": 6
+    },
+    {
+      "id": "p2",
+      "name": "Otis",
+      "connected": true,
+      "inactive": false,
+      "farm": 6,
+      "moon": 4,
+      "rocket": {
+        "pieces": [
+          {
+            "instanceId": "c17",
+            "cardId": "heavily_improvised_bottom",
+            "name": "Heavily Improvised Rocket Bottom",
+            "type": "rocketPiece",
+            "text": "Rocket piece: Heavily Improvised bottom.",
+            "effect": null,
+            "params": null,
+            "pieceType": "heavily_improvised",
+            "part": "bottom"
+          }
+        ],
+        "cows": 0,
+        "complete": false,
+        "capacity": 4
+      },
+      "handCount": 7
+    },
+    {
+      "id": "p3",
+      "name": "Clarabelle",
+      "connected": true,
+      "inactive": false,
+      "farm": 5,
+      "moon": 4,
+      "rocket": {
+        "pieces": [
+          {
+            "instanceId": "c13",
+            "cardId": "heavily_improvised_top",
+            "name": "Heavily Improvised Rocket Top",
+            "type": "rocketPiece",
+            "text": "Rocket piece: Heavily Improvised top.",
+            "effect": null,
+            "params": null,
+            "pieceType": "heavily_improvised",
+            "part": "top"
+          }
+        ],
+        "cows": 1,
+        "complete": false,
+        "capacity": 4
+      },
+      "handCount": 6
+    }
+  ],
+  "deckCount": 13,
+  "discard": [
+    {
+      "instanceId": "c44",
+      "cardId": "launch",
+      "name": "Launch",
+      "type": "launch",
+      "text": "Launches a completed rocket (with any cows aboard) to the moon. Not counterable.",
+      "effect": null,
+      "params": null,
+      "pieceType": null,
+      "part": null
+    },
+    {
+      "instanceId": "c1",
+      "cardId": "nasa_import_top",
+      "name": "Nasa Import Rocket Top",
+      "type": "rocketPiece",
+      "text": "Rocket piece: Nasa Import top.",
+      "effect": null,
+      "params": null,
+      "pieceType": "nasa_import",
+      "part": "top"
+    },
+    {
+      "instanceId": "c9",
+      "cardId": "farmmade_middle",
+      "name": "Farmmade Rocket Middle",
+      "type": "rocketPiece",
+      "text": "Rocket piece: Farmmade middle.",
+      "effect": null,
+      "params": null,
+      "pieceType": "farmmade",
+      "part": "middle"
+    },
+    {
+      "instanceId": "c20",
+      "cardId": "wild_card",
+      "name": "Wild Card",
+      "type": "rocketPiece",
+      "text": "Counts as any rocket piece. Does not count toward the matching-set bonus.",
+      "effect": null,
+      "params": null,
+      "pieceType": "wild",
+      "part": "any"
+    }
+  ],
+  "rocketStore": [
+    {
+      "instanceId": "c2",
+      "cardId": "nasa_import_top",
+      "name": "Nasa Import Rocket Top",
+      "type": "rocketPiece",
+      "text": "Rocket piece: Nasa Import top.",
+      "effect": null,
+      "params": null,
+      "pieceType": "nasa_import",
+      "part": "top"
+    },
+    {
+      "instanceId": "c19",
+      "cardId": "wild_card",
+      "name": "Wild Card",
+      "type": "rocketPiece",
+      "text": "Counts as any rocket piece. Does not count toward the matching-set bonus.",
+      "effect": null,
+      "params": null,
+      "pieceType": "wild",
+      "part": "any"
+    },
+    {
+      "instanceId": "c11",
+      "cardId": "farmmade_bottom",
+      "name": "Farmmade Rocket Bottom",
+      "type": "rocketPiece",
+      "text": "Rocket piece: Farmmade bottom.",
+      "effect": null,
+      "params": null,
+      "pieceType": "farmmade",
+      "part": "bottom"
+    },
+    {
+      "instanceId": "c34",
+      "cardId": "super_speedy_cows",
+      "name": "Super Speedy Cows",
+      "type": "event",
+      "text": "Move up to three cows from your farm into your rocket.",
+      "effect": "moveCowsFarmToRocket",
+      "params": {
+        "count": 3
+      },
+      "pieceType": null,
+      "part": null
+    }
+  ],
+  "turn": {
+    "currentPlayerId": "p1",
+    "phase": "draw",
+    "actionsRemaining": 0,
+    "drawsRemaining": 2
+  },
+  "badWeather": [],
+  "pending": null,
+  "winnerId": null,
+  "actionsPerTurn": 3,
+  "drawsPerTurn": 2,
+  "log": [
+    {
+      "type": "respondedPass",
+      "playerId": "p2"
+    },
+    {
+      "type": "respondedPass",
+      "playerId": "p3"
+    },
+    {
+      "type": "cowsMovedToRocket",
+      "playerId": "p1",
+      "moved": 0
+    },
+    {
+      "type": "eventResolved",
+      "cardId": "super_speedy_cows",
+      "playerId": "p1"
+    },
+    {
+      "type": "recycled",
+      "playerId": "p1",
+      "cardId": "launch"
+    },
+    {
+      "type": "turnEnded",
+      "playerId": "p1",
+      "forfeitedActions": 0
+    },
+    {
+      "type": "turnStarted",
+      "playerId": "p2"
+    },
+    {
+      "type": "drew",
+      "playerId": "p2",
+      "picks": [
+        {
+          "source": "deck"
+        },
+        {
+          "source": "deck"
+        }
+      ]
+    },
+    {
+      "type": "rocketPiecePlayed",
+      "playerId": "p2",
+      "cardId": "farmmade_top"
+    },
+    {
+      "type": "rocketLaunched",
+      "playerId": "p2",
+      "cows": 4
+    },
+    {
+      "type": "rocketPiecePlayed",
+      "playerId": "p2",
+      "cardId": "heavily_improvised_bottom"
+    },
+    {
+      "type": "turnEnded",
+      "playerId": "p2",
+      "forfeitedActions": 0
+    },
+    {
+      "type": "turnStarted",
+      "playerId": "p3"
+    },
+    {
+      "type": "deckReshuffled",
+      "cards": 15
+    },
+    {
+      "type": "drew",
+      "playerId": "p3",
+      "picks": [
+        {
+          "source": "deck"
+        },
+        {
+          "source": "deck"
+        }
+      ]
+    },
+    {
+      "type": "rocketLaunched",
+      "playerId": "p3",
+      "cows": 4
+    },
+    {
+      "type": "rocketPiecePlayed",
+      "playerId": "p3",
+      "cardId": "heavily_improvised_top"
+    },
+    {
+      "type": "herded",
+      "playerId": "p3"
+    },
+    {
+      "type": "turnEnded",
+      "playerId": "p3",
+      "forfeitedActions": 0
+    },
+    {
+      "type": "turnStarted",
+      "playerId": "p1"
+    }
+  ]
+}

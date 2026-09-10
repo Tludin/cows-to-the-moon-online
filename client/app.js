@@ -287,7 +287,6 @@ function App() {
   }, []);
 
   return html`<div className=${`app app--${state.screen}`}>
-    <h1>Cows To The Mooooooooon!</h1>
     ${state.error &&
     html`<p role="alert">
       <b>${state.error}</b>
@@ -298,12 +297,121 @@ function App() {
       <b>Anyone there? The game times out in ${state.inactivityWarning.graceSeconds}s of inactivity.</b>
       <button onClick=${() => send({ type: 'keepAlive' })}>We're still here!</button>
     </p>`}
+    ${(state.screen === 'home' || state.screen === 'lobby') && html`<${MenuTable} />`}
     ${state.screen === 'home' && html`<${Home} connected=${state.connected} />`}
     ${state.screen === 'lobby' && html`<${Lobby} state=${state} />`}
     ${state.screen === 'game' && html`<${Game} state=${state} deadline=${state.deadline} />`}
   </div>`;
 }
 
+/**
+ * A REAL simulated game state used only to dress the menu backdrop (see
+ * MenuTable below): three bots played 12 full turns (4 each) under the
+ * actual engine rules, and `scopedView` (the exact function the server uses
+ * to build a player's state view — server/views.ts) captured the result as
+ * this GameView-shaped JSON. Not hand-fabricated, never sent to or received
+ * from the server at runtime — regenerate it with
+ * `node --experimental-strip-types scripts/gen-menu-snapshot.ts` (from
+ * cows-online/) if you want a different frozen moment. Loaded once
+ * alongside art.json, below.
+ */
+let MENU_G = null;
+const MENU_NOOP = () => {};
+
+/**
+ * The menu's idling table-in-space backdrop: the same starfield (already on
+ * body) plus the real table scene — .table-camera/.table-disc/.table-hub/
+ * .seat, reusing LaunchPad/Farm/MoonDisc so it automatically gets the same
+ * wood/felt/card styling as an in-game table — frozen mid-game (MENU_G
+ * above) and spinning slowly and passively behind the screen-anchored
+ * home/lobby panel (see .menu-table-viewport in styles.css for the
+ * animation). Purely decorative: no camera/zoom state, and
+ * .menu-table-viewport is pointer-events:none so nothing on it is draggable
+ * or clickable — dragging or clicking the visible table on the menu does
+ * nothing. Renders nothing until MENU_G has loaded.
+ */
+function MenuTable() {
+  const g = MENU_G;
+  if (!g) return null;
+  const n = g.players.length;
+  const topDiscard = g.discard.length ? g.discard[g.discard.length - 1] : null;
+  return html`<div className="menu-table-viewport" aria-hidden="true">
+    <div className="table-camera">
+      <div className="table-disc">
+        <div className="table-hub">
+          <div className="table-hub-inner">
+            <div className="store">
+              <div className="store-cards2">
+                ${g.rocketStore.map(
+                  (c) => html`<div
+                    key=${c.instanceId}
+                    className=${`store-card card--${cardKind(c)} ${cardArt(c) ? 'has-art' : ''}`}
+                  >
+                    ${cardArt(c) ? html`<div className="card-art" style=${bgImage(cardArt(c))}></div>` : ''}
+                    <span className="sc-name">${c.name}</span>
+                  </div>`,
+                )}
+              </div>
+              <span className="pile-cap">Rocket store</span>
+            </div>
+            <div className="hub-row">
+              <div className="pile deck-pile">
+                <span className="pile-visual">
+                  <span className="pile-back" style=${bgImage(boardArt('back'))}></span>
+                </span>
+                <span className="pile-cap">Deck · ${g.deckCount}</span>
+              </div>
+              <${MoonDisc} g=${g} />
+              <div className="pile discard-pile">
+                <span className="pile-visual">
+                  ${topDiscard
+                    ? html`<span
+                        className=${`pile-face card--${cardKind(topDiscard)}`}
+                        style=${cardArt(topDiscard)
+                          ? { ...bgImage(cardArt(topDiscard)), color: 'transparent', borderTopColor: 'transparent' }
+                          : undefined}
+                      >${topDiscard.name}</span>`
+                    : html`<span className="pile-empty">empty</span>`}
+                </span>
+                <span className="pile-cap">Discard · ${g.discard.length}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        ${g.players.map((p, i) => {
+          const seatAngle = (360 / n) * i;
+          return html`<div
+            className="seat"
+            key=${p.id}
+            style=${{ '--seat-angle': `${seatAngle}deg`, '--pcolor': playerColor(p.id) }}
+          >
+            <div className="seat-inner">
+              <div className="pad-column">
+                <${LaunchPad} p=${p} zone=${null} onZonePick=${MENU_NOOP} />
+              </div>
+              <div className="player-area">
+                <div className="area-title">
+                  ${p.name}'s area<small> · ${p.handCount} in hand · ${p.moon}/10 on moon</small>
+                </div>
+                <${Farm} p=${p} canHerd=${false} zone=${null} onZonePick=${MENU_NOOP} />
+              </div>
+            </div>
+          </div>`;
+        })}
+      </div>
+    </div>
+  </div>`;
+}
+
+/**
+ * The menu panel: a weathered wood-plank frame with a rust-streaked paper
+ * ledger nailed to it — reviewed and approved directly against a live
+ * mockup. Purely presentational: every piece of state, every send() call,
+ * and the screen logic below are unchanged from before; only the DOM
+ * carrying them changed (the same real content now sits inside an inner
+ * "paper" wrapper, nested in an outer wood frame that carries the
+ * decorative hardware — screws, rust, tape — around it).
+ */
 function Home({ connected }) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -318,22 +426,37 @@ function Home({ connected }) {
     send({ type: 'joinRoom', name, code });
   };
   return html`<div className="home">
-    <p className="status-line">${connected ? 'Connected' : 'Connecting…'}</p>
-    ${seats.length > 0 &&
-    html`<div className="rejoin-box">
-      <b>Rejoin a game</b>
-      ${seats.map(
-        (s) => html`<button key=${`${s.roomCode}:${s.playerId}`} onClick=${() => sendReconnect(s)}>
-          Rejoin ${s.roomCode}${s.name ? ` as ${s.name}` : ''}
-        </button>`,
-      )}
-    </div>`}
-    <label>Your name<input value=${name} onInput=${(e) => setName(e.target.value)} placeholder="e.g. Bessie" /></label>
-    <button className="primary-cta" disabled=${!name} onClick=${create}>Create a game</button>
-    <div className="divider"></div>
-    <label>Join code<input value=${code} onInput=${(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. 7FQK2" /></label>
-    <button className="primary-cta" disabled=${!name || !code} onClick=${join}>Join game</button>
-    <p><small>Rejoining a running game? Enter the code with the same name you played under, or use a Rejoin button above.</small></p>
+    <span className="panel-screw c1"></span><span className="panel-screw c2"></span><span className="panel-screw c3"></span><span className="panel-screw c4"></span>
+    <span className="panel-screw p1"></span><span className="panel-screw p2"></span>
+    <span className="panel-rust r1"></span><span className="panel-rust r2"></span>
+    <span className="panel-tape"></span>
+    <div className="panel-seam" style=${{ left: '34%' }}></div>
+    <div className="panel-seam" style=${{ left: '68%' }}></div>
+    <div className="panel-card">
+      <span className="panel-rust r3"></span><span className="panel-rust r4"></span>
+      <div className="panel-holes" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => html`<span key=${i}></span>`)}</div>
+      <p className="panel-kicker">Rocket Store Order Slip</p>
+      <h1>Cows to the Moon</h1>
+      <p className="panel-subtitle">online multiplayer game v0.1.23</p>
+      <div className="panel-rule"></div>
+      <p className="status-line"><span>Connection</span><span>${connected ? 'established' : 'connecting…'}</span></p>
+      ${seats.length > 0 &&
+      html`<div className="rejoin-box">
+        <b>Rejoin a game</b>
+        ${seats.map(
+          (s) => html`<button key=${`${s.roomCode}:${s.playerId}`} onClick=${() => sendReconnect(s)}>
+            Rejoin ${s.roomCode}${s.name ? ` as ${s.name}` : ''}
+          </button>`,
+        )}
+      </div>`}
+      <label>Your name<input value=${name} onInput=${(e) => setName(e.target.value)} placeholder="e.g. Bessie" /></label>
+      <button className="primary-cta" disabled=${!name} onClick=${create}>Create a game</button>
+      <div className="divider"></div>
+      <label>Join code<input value=${code} onInput=${(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. 7FQK2" /></label>
+      <button className="primary-cta" disabled=${!name || !code} onClick=${join}>Join game</button>
+      <p><small>Rejoining a running game? Enter the code with the same name you played under, or use a Rejoin button above.</small></p>
+      <div className="panel-stamp">Approved<br />County<br />Rocketry Board</div>
+    </div>
   </div>`;
 }
 
@@ -343,24 +466,35 @@ function Lobby({ state }) {
   const isHost = state.you === lobby.hostId;
   const canStart = lobby.players.length >= lobby.minPlayers;
   return html`<div className="lobby">
-    <h2 className="code-chip">
-      Lobby — <code>${lobby.roomCode}</code>
-      <button onClick=${() => navigator.clipboard?.writeText(lobby.roomCode)}>copy</button>
-    </h2>
-    <ul className="player-list">
-      ${lobby.players.map(
-        (p) => html`<li key=${p.id}>
-          ${p.name}
-          ${p.id === lobby.hostId ? html`<span className="tag tag-host">host</span>` : ''}
-          ${p.id === state.you ? html`<span className="tag tag-you">you</span>` : ''}
-        </li>`,
-      )}
-    </ul>
-    ${isHost
-      ? html`<button className="primary-cta" disabled=${!canStart} onClick=${() => send({ type: 'startGame' })}>
-          Start game (${lobby.players.length}/${lobby.maxPlayers})
-        </button>`
-      : html`<p className="waiting">Waiting for the host to start…</p>`}
+    <span className="panel-screw c1"></span><span className="panel-screw c2"></span><span className="panel-screw c3"></span><span className="panel-screw c4"></span>
+    <span className="panel-screw p1"></span><span className="panel-screw p2"></span>
+    <span className="panel-rust r1"></span><span className="panel-rust r2"></span>
+    <span className="panel-tape"></span>
+    <div className="panel-seam" style=${{ left: '34%' }}></div>
+    <div className="panel-seam" style=${{ left: '68%' }}></div>
+    <div className="panel-card">
+      <span className="panel-rust r3"></span><span className="panel-rust r4"></span>
+      <div className="panel-holes" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => html`<span key=${i}></span>`)}</div>
+      <h2 className="code-chip">
+        Lobby — <code>${lobby.roomCode}</code>
+        <button onClick=${() => navigator.clipboard?.writeText(lobby.roomCode)}>copy</button>
+      </h2>
+      <ul className="player-list">
+        ${lobby.players.map(
+          (p) => html`<li key=${p.id}>
+            ${p.name}
+            ${p.id === lobby.hostId ? html`<span className="tag tag-host">host</span>` : ''}
+            ${p.id === state.you ? html`<span className="tag tag-you">you</span>` : ''}
+          </li>`,
+        )}
+      </ul>
+      ${isHost
+        ? html`<button className="primary-cta" disabled=${!canStart} onClick=${() => send({ type: 'startGame' })}>
+            Start game (${lobby.players.length}/${lobby.maxPlayers})
+          </button>`
+        : html`<p className="waiting">Waiting for the host to start…</p>`}
+      <div className="panel-stamp">Approved<br />County<br />Rocketry Board</div>
+    </div>
   </div>`;
 }
 
@@ -1572,11 +1706,20 @@ function LogTail({ g }) {
   </details>`;
 }
 
-// Load the art map first (falls back to text if it's missing), then render.
-fetch('art.json')
-  .then((r) => (r.ok ? r.json() : null))
-  .then((a) => {
-    if (a) ART = { cards: a.cards ?? {}, board: a.board ?? {} };
-  })
-  .catch(() => {})
-  .finally(() => createRoot(document.getElementById('root')).render(html`<${App} />`));
+// Load the art map and the menu backdrop's frozen game snapshot first (both
+// fall back gracefully if missing — plain text, and no backdrop at all,
+// respectively), then render.
+Promise.all([
+  fetch('art.json')
+    .then((r) => (r.ok ? r.json() : null))
+    .then((a) => {
+      if (a) ART = { cards: a.cards ?? {}, board: a.board ?? {} };
+    })
+    .catch(() => {}),
+  fetch('menu-snapshot.json')
+    .then((r) => (r.ok ? r.json() : null))
+    .then((g) => {
+      if (g) MENU_G = g;
+    })
+    .catch(() => {}),
+]).finally(() => createRoot(document.getElementById('root')).render(html`<${App} />`));

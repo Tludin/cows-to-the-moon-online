@@ -134,17 +134,6 @@ h3 {
   line-height: 1.15;
 }
 
-/* App title */
-#root > div > h1:first-child {
-  font-family: var(--font-display);
-  color: var(--on-felt);
-  text-align: center;
-  font-size: clamp(1.6rem, 3.6vw, 2.3rem);
-  letter-spacing: 0.5px;
-  font-weight: 500;
-  margin: 6px 0 20px;
-}
-
 code {
   font-family: 'Fredoka', ui-monospace, monospace;
   background: rgba(0, 0, 0, 0.06);
@@ -231,15 +220,187 @@ button.subtle {
   background: var(--ink);
 }
 
-/* -------------------------------------------------------- home / lobby */
+/* -------------------------------------------------------- home / lobby
+   The menu panel: a weathered wood-plank frame (reusing the same
+   --wood-light/--wood-mid/--wood-dark tokens the in-game table rim uses)
+   with a rust-streaked paper ledger nailed to it, screws, a duct-tape
+   patch, and the "Approved / County / Rocketry Board" stamp. Built from a
+   design pass reviewed and approved directly against a live mockup (see
+   ../CLAUDE.md's Phase 4/5 notes for the session that produced it). Fully
+   presentational — Home/Lobby's state, `send()` calls and screen logic are
+   untouched; only the DOM structure carrying them changed (an outer wood
+   frame + decorative hardware around the same real content, now nested in
+   an inner "paper" wrapper instead of sitting directly in the frame). */
 .home,
 .lobby {
-  background: var(--paper);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 24px 26px;
-  max-width: 440px;
+  --panel-paper: #e6d4a8;
+  --panel-ink: #3a2418;
+  --panel-ink-dim: #6b4022;
+  --panel-brass: #a8823f;
+  --panel-stamp: #7a3230;
+  /* Positioned + z-index so this paints ABOVE .menu-table-viewport: fixed-
+     position siblings with z-index:auto/0 paint after non-positioned in-flow
+     boxes in stacking order, so without this the (pointer-events:none)
+     field backdrop would visually cover the panel. */
+  position: relative;
+  z-index: 1;
+  width: min(92vw, 460px);
   margin: 0 auto;
+  padding: 18px;
+  border-radius: 3px;
+  box-shadow: 0 24px 55px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.1) 0 3px, transparent 3px 5px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 2px, transparent 2px 70px),
+    linear-gradient(96deg, var(--wood-light), var(--wood-mid) 45%, var(--wood-dark));
+}
+/* a plank seam and a diagonal cross-brace, just so the frame reads as
+   built from boards rather than a single slab */
+.home::before,
+.lobby::before {
+  content: '';
+  position: absolute;
+  top: -6%;
+  left: 8%;
+  width: 120%;
+  height: 20px;
+  transform: rotate(24deg);
+  transform-origin: left center;
+  background: linear-gradient(180deg, var(--wood-dark), #2c1c10);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+  z-index: 0;
+}
+.home .panel-seam,
+.lobby .panel-seam {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  width: 2px;
+  background: rgba(0, 0, 0, 0.4);
+  box-shadow: 2px 0 0 rgba(255, 255, 255, 0.06);
+}
+/* corner screws + the two nails pinning the paper + the tape patch: all
+   live directly on the frame (NOT inside .panel-card below), because
+   .panel-card has a clip-path for its cut corner, and clip-path clips a
+   box's entire paint area including descendants positioned outside it —
+   these sit at the frame/card seam on purpose, so nesting them under the
+   card silently clips half of each one away. */
+.panel-screw {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #d6d0c0, #8f8570 60%, #4c4838 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  z-index: 2;
+}
+.panel-screw::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 15%;
+  right: 15%;
+  height: 1.6px;
+  background: #322e22;
+  transform: translateY(-50%) rotate(var(--r, 18deg));
+}
+.panel-screw.c1 { top: 9px; left: 9px; --r: -12deg; }
+.panel-screw.c2 { top: 9px; right: 9px; --r: 22deg; }
+.panel-screw.c3 { bottom: 9px; left: 9px; --r: 8deg; }
+.panel-screw.c4 { bottom: 9px; right: 9px; --r: -18deg; }
+.panel-screw.p1 { top: 12px; left: 40px; --r: -30deg; }
+.panel-screw.p2 { top: 12px; right: 68px; --r: 40deg; }
+.panel-rust {
+  position: absolute;
+  width: 10px;
+  z-index: 1;
+  /* an ellipse tapering on every side, not a flat-topped bar: feathers
+     naturally into a stain instead of reading as an opaque rectangle */
+  background: radial-gradient(ellipse 42% 100% at 50% 0%, rgba(150, 72, 26, 0.55), rgba(150, 72, 26, 0.18) 55%, transparent 85%);
+  filter: blur(0.4px);
+}
+.panel-rust.r1 { top: 18px; left: 9px; height: 60px; transform: rotate(4deg); }
+.panel-rust.r2 { top: 18px; right: 10px; height: 48px; transform: rotate(-6deg); }
+.panel-rust.r3 { top: 8px; left: 24px; height: 64px; }
+.panel-rust.r4 { top: 8px; right: 52px; height: 52px; }
+.panel-tape {
+  position: absolute;
+  width: 96px;
+  height: 28px;
+  top: 6px;
+  right: 36px;
+  transform: rotate(9deg);
+  z-index: 2;
+  background:
+    repeating-linear-gradient(96deg, rgba(255, 255, 255, 0.15) 0 2px, transparent 2px 6px),
+    linear-gradient(96deg, #cbc5b6, #e6e1d2 55%, #c3bdad);
+  opacity: 0.85;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* the paper ledger nailed to the frame */
+.panel-card {
+  position: relative;
+  z-index: 1;
+  color: var(--panel-ink);
+  border: 1.5px solid #6b3a24;
+  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.4), inset 0 0 36px rgba(120, 60, 20, 0.2);
+  padding: 26px 24px 20px;
+  transform: rotate(-0.6deg);
+  background:
+    linear-gradient(180deg, rgba(150, 72, 26, 0.4) 0%, rgba(150, 72, 26, 0) 14%),
+    radial-gradient(56px 180px at 24% 0%, rgba(150, 72, 26, 0.3), transparent 60%),
+    radial-gradient(56px 150px at 82% 0%, rgba(150, 72, 26, 0.24), transparent 60%),
+    var(--panel-paper);
+}
+.panel-holes {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 0 3px;
+}
+.panel-holes span {
+  width: 9px;
+  height: 12px;
+  border-radius: 50%;
+  /* the wood frame's own colour + an inset shadow, so this reads as a real
+     hole showing the board underneath rather than a printed paper-tan dot */
+  background: linear-gradient(100deg, var(--wood-light), var(--wood-mid) 55%, var(--wood-dark));
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.65), inset 0 -1px 1px rgba(255, 255, 255, 0.08);
+}
+.panel-kicker {
+  font-family: 'Rockwell', 'Roboto Slab', Georgia, serif;
+  font-size: 0.66rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--panel-brass);
+  text-align: center;
+  margin: 0 0 6px;
+}
+.panel-card h1 {
+  font-family: 'Rockwell', 'Roboto Slab', Georgia, serif;
+  font-weight: 700;
+  font-size: clamp(1.45rem, 5vw, 1.75rem);
+  text-align: center;
+  margin: 0;
+  text-wrap: balance;
+  color: var(--panel-ink);
+}
+.panel-subtitle {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 0.78rem;
+  text-align: center;
+  margin: 4px 0 12px;
+  color: var(--panel-ink-dim);
+}
+.panel-rule {
+  height: 1px;
+  opacity: 0.35;
+  margin: 0 auto 14px;
+  width: 80%;
+  background: #5c3420;
 }
 .home p,
 .lobby p {
@@ -248,62 +409,131 @@ button.subtle {
 .home label,
 .lobby label {
   display: block;
-  font-weight: 700;
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--panel-brass);
   margin: 14px 0 6px;
 }
 input {
-  font-family: var(--font-body);
-  font-size: 1rem;
+  font-family: Georgia, serif;
+  font-size: 0.95rem;
   width: 100%;
-  padding: 10px 12px;
-  border: 1.5px solid var(--paper-line);
-  border-radius: var(--radius-sm);
-  background: #fff;
+  padding: 9px 11px;
+  border: 1px solid #5c3420;
+  border-radius: 2px;
+  background: #f3e2ba;
+  color: var(--panel-ink);
   transition: border-color 0.15s ease;
+}
+input::placeholder {
+  color: #a5794c;
+  font-style: italic;
 }
 input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--panel-brass);
 }
 .status-line {
-  color: var(--muted);
-  font-weight: 700;
-  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-size: 0.78rem;
+  color: var(--panel-ink-dim);
+}
+.status-line::before {
+  flex: 1;
+  content: '';
+  border-bottom: 1px dotted #5c3420;
+  order: 1;
+}
+.status-line span:first-child {
+  order: 0;
+}
+.status-line span:last-child {
+  order: 2;
 }
 .rejoin-box {
-  background: rgba(0, 0, 0, 0.03);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
-  margin: 12px 0;
+  border: 1px solid #a86a3a;
+  border-left: 3px solid var(--panel-brass);
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 0;
+  padding: 10px 12px;
+  margin: 14px 0;
+}
+.rejoin-box b {
+  font-family: 'Rockwell', 'Roboto Slab', Georgia, serif;
+  font-weight: 700;
+  font-size: 0.76rem;
+  color: var(--panel-ink-dim);
 }
 .rejoin-box button {
-  background: var(--neutral);
+  background: transparent;
+  border: 1px solid #5c3420;
+  color: var(--panel-ink);
+  font-family: Georgia, serif;
   width: 100%;
-  margin-top: 4px;
+  margin-top: 6px;
+  text-align: left;
 }
 .divider {
   height: 1px;
-  background: var(--paper-line);
+  background: #5c3420;
+  opacity: 0.3;
   margin: 18px 0;
 }
 .primary-cta {
   width: 100%;
-  padding: 12px;
-  font-size: 1.05rem;
+  padding: 11px;
+  font-family: 'Rockwell', 'Roboto Slab', Georgia, serif;
+  font-weight: 700;
+  font-size: 0.92rem;
+  background: var(--panel-ink);
+  color: var(--panel-paper);
+}
+.panel-stamp {
+  position: absolute;
+  bottom: -14px;
+  left: -10px;
+  width: 86px;
+  height: 86px;
+  border: 2px double var(--panel-stamp);
+  border-radius: 50%;
+  color: var(--panel-stamp);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-family: 'Rockwell', 'Roboto Slab', Georgia, serif;
+  font-weight: 700;
+  font-size: 0.46rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  line-height: 1.25;
+  padding: 7px;
+  transform: rotate(-10deg);
+  opacity: 0.85;
+  mix-blend-mode: multiply;
 }
 
 .code-chip {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  color: var(--panel-ink);
 }
 .code-chip code {
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   letter-spacing: 1px;
+  background: rgba(0, 0, 0, 0.08);
 }
 .code-chip button {
-  background: var(--neutral);
-  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid #5c3420;
+  color: var(--panel-ink);
+  padding: 4px 11px;
 }
 .player-list {
   list-style: none;
@@ -311,29 +541,32 @@ input:focus {
   margin: 14px 0;
 }
 .player-list li {
-  padding: 9px 4px;
-  border-bottom: 1px solid var(--paper-line);
+  padding: 8px 4px;
+  border-bottom: 1px dotted #5c3420;
   font-weight: 700;
+  color: var(--panel-ink);
 }
 .tag {
-  font-family: var(--font-head);
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 1px 8px;
-  border-radius: 999px;
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 2px;
   margin-left: 6px;
   vertical-align: middle;
 }
 .tag-host {
-  background: rgba(217, 138, 68, 0.16);
-  color: #9a6320;
+  background: rgba(168, 130, 63, 0.24);
+  color: var(--panel-ink-dim);
 }
 .tag-you {
-  background: rgba(90, 157, 106, 0.18);
-  color: var(--accent-dark);
+  background: rgba(58, 110, 66, 0.22);
+  color: #2f5a2a;
 }
 .waiting {
-  color: var(--muted);
+  color: var(--panel-ink-dim);
   font-style: italic;
   font-weight: 700;
 }
@@ -356,11 +589,6 @@ input:focus {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-/* The title belongs to the home and lobby screens; in game it would just be a
-   bar across the top of the table. */
-#root > .app--game > h1:first-child {
-  display: none;
 }
 .app--game .game {
   flex: 1;
@@ -462,6 +690,54 @@ input:focus {
   font-size: 0.9rem;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75);
   opacity: 0.95;
+}
+
+/* --------------------------------------------------- menu idling table */
+/* Screen-anchored backdrop behind the home/lobby panel: the same starfield
+   (already on body) plus the real table scene, reusing .table-camera/
+   .table-disc/.table-hub/.seat verbatim (see MenuTable in app.js) so it gets
+   identical wood/felt/card styling to an in-game table, just frozen and
+   spinning slowly and passively. No JS camera state — a plain CSS @keyframes
+   loop — and not interactive: pointer-events:none here means dragging or
+   clicking the visible table on the menu does nothing (interactivity only
+   exists in-game). Deliberately its own wrapper rather than reusing
+   .table-viewport: that class carries `flex: 1; min-height: 0`, sized for
+   life inside .table's flex column, not a fixed full-bleed backdrop. */
+.menu-table-viewport {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  perspective: var(--camera-dist);
+  perspective-origin: 50% 50%;
+}
+/* Fixed tilt and a fixed pull-back so the whole disc frames within the
+   viewport — the pull-back matches the in-game camera's own default-zoom
+   pull-back (zoomToZ(ZOOM_DEFAULT) in app.js), just hard-coded here since
+   there's no zoom state to derive it from. rotateX(0) is dead top-down —
+   the disc faces the camera flat-on as a full circle, its TALLEST possible
+   screen profile, equal to its width. Increasing the angle tips the far
+   edge away into the screen, foreshortening the disc into a progressively
+   flatter ellipse (shrinking toward a sliver as it approaches 90deg) — so
+   MORE tilt means a SMALLER vertical profile, the opposite of what "camera
+   pitch" sounds like at a glance. The in-game default
+   (--camera-pitch-default, 48deg) still clipped the near rim below the
+   viewport on shorter screens, so the menu backdrop goes steeper still. */
+.menu-table-viewport .table-camera {
+  transform: translateZ(-1500px) rotateX(64deg);
+}
+.menu-table-viewport .table-disc {
+  animation: menu-idle-spin 150s linear infinite;
+  cursor: default;
+}
+@keyframes menu-idle-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ============================================================ 3D table scene
