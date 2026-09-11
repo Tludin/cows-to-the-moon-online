@@ -287,6 +287,7 @@ function App() {
   }, []);
 
   return html`<div className=${`app app--${state.screen}`}>
+    <h1>Cows To The Mooooooooon!</h1>
     ${state.error &&
     html`<p role="alert">
       <b>${state.error}</b>
@@ -403,15 +404,6 @@ function MenuTable() {
   </div>`;
 }
 
-/**
- * The menu panel: a weathered wood-plank frame with a rust-streaked paper
- * ledger nailed to it — reviewed and approved directly against a live
- * mockup. Purely presentational: every piece of state, every send() call,
- * and the screen logic below are unchanged from before; only the DOM
- * carrying them changed (the same real content now sits inside an inner
- * "paper" wrapper, nested in an outer wood frame that carries the
- * decorative hardware — screws, rust, tape — around it).
- */
 function Home({ connected }) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -426,37 +418,22 @@ function Home({ connected }) {
     send({ type: 'joinRoom', name, code });
   };
   return html`<div className="home">
-    <span className="panel-screw c1"></span><span className="panel-screw c2"></span><span className="panel-screw c3"></span><span className="panel-screw c4"></span>
-    <span className="panel-screw p1"></span><span className="panel-screw p2"></span>
-    <span className="panel-rust r1"></span><span className="panel-rust r2"></span>
-    <span className="panel-tape"></span>
-    <div className="panel-seam" style=${{ left: '34%' }}></div>
-    <div className="panel-seam" style=${{ left: '68%' }}></div>
-    <div className="panel-card">
-      <span className="panel-rust r3"></span><span className="panel-rust r4"></span>
-      <div className="panel-holes" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => html`<span key=${i}></span>`)}</div>
-      <p className="panel-kicker">Rocket Store Order Slip</p>
-      <h1>Cows to the Moon</h1>
-      <p className="panel-subtitle">online multiplayer game v0.1.23</p>
-      <div className="panel-rule"></div>
-      <p className="status-line"><span>Connection</span><span>${connected ? 'established' : 'connecting…'}</span></p>
-      ${seats.length > 0 &&
-      html`<div className="rejoin-box">
-        <b>Rejoin a game</b>
-        ${seats.map(
-          (s) => html`<button key=${`${s.roomCode}:${s.playerId}`} onClick=${() => sendReconnect(s)}>
-            Rejoin ${s.roomCode}${s.name ? ` as ${s.name}` : ''}
-          </button>`,
-        )}
-      </div>`}
-      <label>Your name<input value=${name} onInput=${(e) => setName(e.target.value)} placeholder="e.g. Bessie" /></label>
-      <button className="primary-cta" disabled=${!name} onClick=${create}>Create a game</button>
-      <div className="divider"></div>
-      <label>Join code<input value=${code} onInput=${(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. 7FQK2" /></label>
-      <button className="primary-cta" disabled=${!name || !code} onClick=${join}>Join game</button>
-      <p><small>Rejoining a running game? Enter the code with the same name you played under, or use a Rejoin button above.</small></p>
-      <div className="panel-stamp">Approved<br />County<br />Rocketry Board</div>
-    </div>
+    <p className="status-line">${connected ? 'Connected' : 'Connecting…'}</p>
+    ${seats.length > 0 &&
+    html`<div className="rejoin-box">
+      <b>Rejoin a game</b>
+      ${seats.map(
+        (s) => html`<button key=${`${s.roomCode}:${s.playerId}`} onClick=${() => sendReconnect(s)}>
+          Rejoin ${s.roomCode}${s.name ? ` as ${s.name}` : ''}
+        </button>`,
+      )}
+    </div>`}
+    <label>Your name<input value=${name} onInput=${(e) => setName(e.target.value)} placeholder="e.g. Bessie" /></label>
+    <button className="primary-cta" disabled=${!name} onClick=${create}>Create a game</button>
+    <div className="divider"></div>
+    <label>Join code<input value=${code} onInput=${(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. 7FQK2" /></label>
+    <button className="primary-cta" disabled=${!name || !code} onClick=${join}>Join game</button>
+    <p><small>Rejoining a running game? Enter the code with the same name you played under, or use a Rejoin button above.</small></p>
   </div>`;
 }
 
@@ -466,35 +443,24 @@ function Lobby({ state }) {
   const isHost = state.you === lobby.hostId;
   const canStart = lobby.players.length >= lobby.minPlayers;
   return html`<div className="lobby">
-    <span className="panel-screw c1"></span><span className="panel-screw c2"></span><span className="panel-screw c3"></span><span className="panel-screw c4"></span>
-    <span className="panel-screw p1"></span><span className="panel-screw p2"></span>
-    <span className="panel-rust r1"></span><span className="panel-rust r2"></span>
-    <span className="panel-tape"></span>
-    <div className="panel-seam" style=${{ left: '34%' }}></div>
-    <div className="panel-seam" style=${{ left: '68%' }}></div>
-    <div className="panel-card">
-      <span className="panel-rust r3"></span><span className="panel-rust r4"></span>
-      <div className="panel-holes" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => html`<span key=${i}></span>`)}</div>
-      <h2 className="code-chip">
-        Lobby — <code>${lobby.roomCode}</code>
-        <button onClick=${() => navigator.clipboard?.writeText(lobby.roomCode)}>copy</button>
-      </h2>
-      <ul className="player-list">
-        ${lobby.players.map(
-          (p) => html`<li key=${p.id}>
-            ${p.name}
-            ${p.id === lobby.hostId ? html`<span className="tag tag-host">host</span>` : ''}
-            ${p.id === state.you ? html`<span className="tag tag-you">you</span>` : ''}
-          </li>`,
-        )}
-      </ul>
-      ${isHost
-        ? html`<button className="primary-cta" disabled=${!canStart} onClick=${() => send({ type: 'startGame' })}>
-            Start game (${lobby.players.length}/${lobby.maxPlayers})
-          </button>`
-        : html`<p className="waiting">Waiting for the host to start…</p>`}
-      <div className="panel-stamp">Approved<br />County<br />Rocketry Board</div>
-    </div>
+    <h2 className="code-chip">
+      Lobby — <code>${lobby.roomCode}</code>
+      <button onClick=${() => navigator.clipboard?.writeText(lobby.roomCode)}>copy</button>
+    </h2>
+    <ul className="player-list">
+      ${lobby.players.map(
+        (p) => html`<li key=${p.id}>
+          ${p.name}
+          ${p.id === lobby.hostId ? html`<span className="tag tag-host">host</span>` : ''}
+          ${p.id === state.you ? html`<span className="tag tag-you">you</span>` : ''}
+        </li>`,
+      )}
+    </ul>
+    ${isHost
+      ? html`<button className="primary-cta" disabled=${!canStart} onClick=${() => send({ type: 'startGame' })}>
+          Start game (${lobby.players.length}/${lobby.maxPlayers})
+        </button>`
+      : html`<p className="waiting">Waiting for the host to start…</p>`}
   </div>`;
 }
 

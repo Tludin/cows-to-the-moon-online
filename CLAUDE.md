@@ -21,20 +21,22 @@ their own home slot when dragged — plus real card + board art (via
 `art.json`). There is NO card-flight animation, no piece-to-piece magnetic
 snapping, and no `prefers-reduced-motion` fallback.
 
-**The home/lobby menu PANEL is a separate, unrelated redesign (2026-09-10,
-farmpunk/farmtech).** `Home`/`Lobby` render as a weathered wood-plank frame
-with a rust-streaked paper ledger nailed to it (screws, a duct-tape patch,
-punch holes that show the wood frame through them, an "Approved / County /
-Rocketry Board" stamp). Designed through ~15 rounds of live iteration
-against a published Artifact mockup before being ported into
-`client/app.js`/`client/styles.css` — see `../CLAUDE.md`'s Phase 4/5 item 4
-for the full build notes. The BACKDROP behind it (`MenuTable`) is NOT part
-of that redesign — a from-scratch grass-field version was built and
-reviewed the same day, then reverted the same day back to the pre-existing
-spinning table + frozen bot-simulated game (`client/menu-snapshot.json` +
-`scripts/gen-menu-snapshot.ts`, both briefly deleted mid-session and
-recreated byte-for-byte) once a look at the panel live showed the table had
-stopped spinning, which wasn't wanted.
+**The home/lobby screen had a farmpunk/farmtech redesign pass on
+2026-09-10 (both the panel and the `MenuTable` backdrop), and BOTH HALVES
+WERE REVERTED on 2026-09-11** after a look at the live result — net effect,
+`Home`/`Lobby`/`MenuTable` are back to exactly what's described below (the
+translucent paper panel, the spinning table + frozen game). The farmpunk
+panel isn't lost, just not live: it's saved at commit `e470646` on
+`improved_graphics`, tagged `menu-panel-farmpunk` — a weathered wood-plank
+frame with a rust-streaked paper ledger nailed to it (screws, a duct-tape
+patch, punch holes that show the wood frame through them, an "Approved /
+County / Rocketry Board" stamp). `git checkout menu-panel-farmpunk --
+client/app.js client/styles.css` brings it back. Full build notes (incl.
+two load-bearing CSS fixes worth knowing before restoring it) in
+`../CLAUDE.md`'s Phase 4/5 item 4. A from-scratch grass-field replacement
+for the backdrop was also built and reviewed live in the same session, but
+was never committed — it exists nowhere in git history, so restoring that
+idea means rebuilding it, not checking it out.
 
 Piece/cow arrangement (in-game) is COSMETIC only — the engine still owns
 rocket completeness and launching. Needs a live browser playtest (the build
