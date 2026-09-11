@@ -234,7 +234,18 @@ button.subtle {
 /* -------------------------------------------------------- home / lobby */
 .home,
 .lobby {
-  background: var(--paper);
+  /* Positioned + z-index so this paints ABOVE .menu-table-viewport: fixed-
+     position siblings with z-index:auto/0 paint after non-positioned in-flow
+     boxes in stacking order, so without this the (pointer-events:none)
+     spinning table backdrop would visually cover the panel. */
+  position: relative;
+  z-index: 1;
+  /* Slightly translucent so the idle table spinning behind it (see
+     .menu-table-viewport) reads as part of the same scene rather than a
+     flat page sitting in front of it. rgba literal (not relative-color
+     syntax) so this doesn't need a very recent browser; keep in sync with
+     --paper (#f6f3ea) by hand if that token ever changes. */
+  background: rgba(246, 243, 234, 0.92);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 24px 26px;
@@ -338,6 +349,12 @@ input:focus {
   font-weight: 700;
 }
 
+/* The title belongs to the home and lobby screens; in game it would just be a
+   bar across the top of the table. */
+#root > .app--game > h1:first-child {
+  display: none;
+}
+
 /* ==================================================== in-game: no-scroll */
 /* The whole table fits the viewport; nothing scrolls the page. Home/lobby
    are unaffected. */
@@ -356,11 +373,6 @@ input:focus {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-/* The title belongs to the home and lobby screens; in game it would just be a
-   bar across the top of the table. */
-#root > .app--game > h1:first-child {
-  display: none;
 }
 .app--game .game {
   flex: 1;
@@ -462,6 +474,60 @@ input:focus {
   font-size: 0.9rem;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75);
   opacity: 0.95;
+}
+
+/* --------------------------------------------------- menu idling table */
+/* Screen-anchored backdrop behind the home/lobby panel: the same starfield
+   (already on body) plus the real table scene, reusing .table-camera/
+   .table-disc/.table-hub/.seat verbatim (see MenuTable in app.js) so it gets
+   identical wood/felt/card styling to an in-game table, just frozen and
+   spinning slowly and passively. No JS camera state — a plain CSS @keyframes
+   loop — and not interactive: pointer-events:none here means dragging or
+   clicking the visible table on the menu does nothing (interactivity only
+   exists in-game). Deliberately its own wrapper rather than reusing
+   .table-viewport: that class carries `flex: 1; min-height: 0`, sized for
+   life inside .table's flex column, not a fixed full-bleed backdrop. */
+.menu-table-viewport {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  perspective: var(--camera-dist);
+  perspective-origin: 50% 50%;
+}
+/* Fixed tilt and a fixed pull-back so the whole disc frames within the
+   viewport — the pull-back matches the in-game camera's own default-zoom
+   pull-back (zoomToZ(ZOOM_DEFAULT) in app.js), just hard-coded here since
+   there's no zoom state to derive it from. rotateX(0) is dead top-down —
+   the disc faces the camera flat-on as a full circle, its TALLEST possible
+   screen profile, equal to its width. Increasing the angle tips the far
+   edge away into the screen, foreshortening the disc into a progressively
+   flatter ellipse (shrinking toward a sliver as it approaches 90deg) — so
+   MORE tilt means a SMALLER vertical profile, the opposite of what "camera
+   pitch" sounds like at a glance. The in-game default
+   (--camera-pitch-default, 48deg) still clipped the near rim below the
+   viewport on shorter screens, so the menu backdrop goes steeper still. */
+.menu-table-viewport .table-camera {
+  transform: translateZ(-1500px) rotateX(64deg);
+}
+.menu-table-viewport .table-disc {
+  animation: menu-idle-spin 220s linear infinite;
+  /* hints the browser to put this on its own compositor layer, so the
+     rotation is handled by the GPU frame-to-frame instead of competing
+     with layout/paint on the main thread — the likely source of the
+     jitter at 150s, where a dropped frame or two is much more visible per
+     degree of rotation than it is now. */
+  will-change: transform;
+  cursor: default;
+}
+@keyframes menu-idle-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ============================================================ 3D table scene
@@ -1643,6 +1709,296 @@ input:focus {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
 }
 
+/* -------------------------------------------------------- rules / how-to
+   Two entry points open the same full-screen Rules page (App's local
+   `showRules` state — a client-only UI flag, never sent to the server):
+   an inline link on the home screen, and a floating "?" during a game.
+   The "?" sits at the vertically-centered right edge rather than a bare
+   corner — the top strip is the HUD (turn info + Do-nothing/End-turn),
+   the bottom-right is the camera-hud (spin/zoom), and top-left is the
+   activity log, so that edge, mid-height, is the one spot genuinely clear
+   of all of it. */
+.howto-link {
+  display: block;
+  text-align: center;
+  margin-top: 10px;
+  background: none;
+  border: none;
+  color: var(--accent-dark);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 4px;
+}
+.howto-link:hover {
+  text-decoration: underline;
+}
+.help-fab {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+  z-index: 21; /* above .camera-hud (20) */
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(246, 243, 234, 0.92);
+  color: var(--ink);
+  border: none;
+  box-shadow: var(--shadow-sm);
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.help-fab:hover {
+  background: #fff;
+}
+
+/* the page itself: fixed full-viewport (like .overlay) but with a SOLID
+   background and its own scroll, since it's a full replacement screen,
+   not a dismiss-by-backdrop-click overlay. z-index 55: above the table/
+   menu backdrop and .overlay's modals (50), below [role='alert'] (60) so
+   a live disconnect/inactivity banner still surfaces over it. */
+.rules-page {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  overflow-y: auto;
+  background: var(--felt-bot);
+}
+.rules-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(36, 64, 47, 0.96);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 10px clamp(16px, 4vw, 32px);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.rules-back {
+  background: none;
+  border: none;
+  color: var(--on-felt);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.rules-back:hover {
+  color: #fff;
+}
+.rules-nav {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.rules-nav a {
+  color: var(--on-felt-dim);
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 999px;
+}
+.rules-nav a:hover {
+  color: var(--on-felt);
+  background: rgba(255, 255, 255, 0.08);
+}
+.rules-sheet {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 36px 20px 80px;
+}
+.rules-header {
+  text-align: center;
+  color: var(--on-felt);
+  margin-bottom: 32px;
+}
+.rules-header h1 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(1.7rem, 5vw, 2.3rem);
+  margin: 0 0 6px;
+}
+.rules-header .meta {
+  color: var(--on-felt-dim);
+  font-size: 0.85rem;
+}
+.rules-card {
+  background: var(--paper);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 30px clamp(20px, 5vw, 44px);
+  color: var(--ink);
+}
+.rules-story {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--muted);
+  border-left: 3px solid var(--paper-line);
+  padding-left: 16px;
+  margin: 0 0 36px;
+}
+.rules-card section {
+  margin-bottom: 34px;
+  scroll-margin-top: 60px;
+}
+.rules-card section:last-child {
+  margin-bottom: 0;
+}
+.rules-card h2 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.3rem;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--paper-line);
+}
+.rules-card h3 {
+  font-family: var(--font-head);
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+  color: var(--accent-dark);
+  margin: 18px 0 6px;
+}
+.rules-card p {
+  line-height: 1.6;
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+.rules-card ul {
+  margin: 0 0 10px;
+  padding-left: 22px;
+  line-height: 1.6;
+}
+.rules-card li {
+  margin-bottom: 4px;
+  font-size: 0.95rem;
+}
+.rules-example {
+  background: rgba(90, 157, 106, 0.08);
+  border-radius: var(--radius-sm);
+  padding: 16px 18px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+.rules-example p {
+  margin: 0 0 10px;
+}
+.rules-example p:last-child {
+  margin-bottom: 0;
+}
+.card-ref-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+.card-ref {
+  border: 1px solid var(--paper-line);
+  border-top: 5px solid var(--c-piece);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fff;
+}
+.card-ref.event {
+  border-top-color: var(--c-event);
+}
+.card-ref.launch {
+  border-top-color: var(--c-launch);
+}
+.card-ref.cownter {
+  border-top-color: var(--c-cownter);
+}
+.card-ref .kind {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.card-ref .name {
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 0.92rem;
+  margin-bottom: 5px;
+}
+.card-ref .text {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+/* "Using the Web App" gets its own tint — software UX, not game rules —
+   without breaking from the paper/typography system around it. */
+.webapp-section {
+  background: rgba(60, 90, 120, 0.06);
+  border: 1px solid rgba(60, 90, 120, 0.14);
+  border-radius: var(--radius-sm);
+  padding: 22px clamp(16px, 4vw, 28px);
+}
+.webapp-section h2 {
+  border-bottom-color: rgba(60, 90, 120, 0.2);
+}
+.webapp-steps {
+  counter-reset: webapp-step;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.webapp-steps li {
+  counter-increment: webapp-step;
+  position: relative;
+  padding-left: 34px;
+  margin-bottom: 14px;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+.webapp-steps li::before {
+  content: counter(webapp-step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #3c5a78;
+  color: #fff;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 0.72rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.webapp-steps li strong {
+  color: var(--ink);
+}
+.webapp-note {
+  background: rgba(230, 194, 92, 0.14);
+  border-left: 3px solid var(--select);
+  border-radius: 4px;
+  padding: 10px 14px;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  margin-top: 6px;
+}
+.rules-footnote {
+  text-align: center;
+  font-style: italic;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 30px;
+}
+
 /* --------------------------------------------------------------- mobile */
 @media (max-width: 640px) {
   #root {
@@ -1655,5 +2011,11 @@ input:focus {
   .rail-card {
     width: 104px;
     margin-left: -40px;
+  }
+  .rules-sheet {
+    padding: 24px 12px 60px;
+  }
+  .rules-card {
+    padding: 22px 16px;
   }
 }
