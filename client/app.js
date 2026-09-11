@@ -281,13 +281,20 @@ function cardKind(card) {
 
 function App() {
   const [state, dispatch] = useReducer(reducer, initial);
+  // Whether the Rules page is open — a client-only UI flag, never sent to
+  // or received from the server (it has no idea a player is reading the
+  // rules). Two entry points set it: the "How to play" link on Home, and
+  // the floating "?" during a game (see Home/Game below). It layers over
+  // whichever screen you were on, and closing it just drops back to that
+  // same screen — there's no separate "screen" for it in `state`.
+  const [showRules, setShowRules] = useState(false);
   useEffect(() => {
     dispatchRef = dispatch;
     connect();
   }, []);
 
-  return html`<div className=${`app app--${state.screen}`}>
-    <h1>Cows To The Mooooooooon!</h1>
+  return html`<div className=${`app app--${showRules ? 'rules' : state.screen}`}>
+    ${!showRules && html`<h1>Cows To The Mooooooooon!</h1>`}
     ${state.error &&
     html`<p role="alert">
       <b>${state.error}</b>
@@ -298,10 +305,11 @@ function App() {
       <b>Anyone there? The game times out in ${state.inactivityWarning.graceSeconds}s of inactivity.</b>
       <button onClick=${() => send({ type: 'keepAlive' })}>We're still here!</button>
     </p>`}
-    ${(state.screen === 'home' || state.screen === 'lobby') && html`<${MenuTable} />`}
-    ${state.screen === 'home' && html`<${Home} connected=${state.connected} />`}
-    ${state.screen === 'lobby' && html`<${Lobby} state=${state} />`}
-    ${state.screen === 'game' && html`<${Game} state=${state} deadline=${state.deadline} />`}
+    ${!showRules && (state.screen === 'home' || state.screen === 'lobby') && html`<${MenuTable} />`}
+    ${!showRules && state.screen === 'home' && html`<${Home} connected=${state.connected} onShowRules=${() => setShowRules(true)} />`}
+    ${!showRules && state.screen === 'lobby' && html`<${Lobby} state=${state} />`}
+    ${!showRules && state.screen === 'game' && html`<${Game} state=${state} deadline=${state.deadline} onShowRules=${() => setShowRules(true)} />`}
+    ${showRules && html`<${Rules} onBack=${() => setShowRules(false)} />`}
   </div>`;
 }
 
@@ -404,7 +412,7 @@ function MenuTable() {
   </div>`;
 }
 
-function Home({ connected }) {
+function Home({ connected, onShowRules }) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   // Hide seats being actively played in another tab of this browser.
@@ -434,6 +442,7 @@ function Home({ connected }) {
     <label>Join code<input value=${code} onInput=${(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. 7FQK2" /></label>
     <button className="primary-cta" disabled=${!name || !code} onClick=${join}>Join game</button>
     <p><small>Rejoining a running game? Enter the code with the same name you played under, or use a Rejoin button above.</small></p>
+    <button className="howto-link" onClick=${onShowRules}>How to play →</button>
   </div>`;
 }
 
@@ -461,6 +470,199 @@ function Lobby({ state }) {
           Start game (${lobby.players.length}/${lobby.maxPlayers})
         </button>`
       : html`<p className="waiting">Waiting for the host to start…</p>`}
+  </div>`;
+}
+
+/**
+ * The full Rules / "How to Play" page — reached from Home's "How to play"
+ * link or Game's floating "?" (see App above, which owns the `showRules`
+ * flag both call into). A full-screen replacement, not a modal: content is
+ * long enough to want real page scrolling, so it's its own fixed,
+ * independently-scrolling layer (.rules-page) rather than something
+ * squeezed into .overlay's centered-modal pattern. `onBack` just flips
+ * that flag back off — there's no server round-trip, and whichever screen
+ * was underneath (home or an in-progress game) is exactly as it was.
+ * Game rules content is adapted from Cows_To_the_Moon_Rules_Revised.pdf;
+ * the "Using the Web App" section is this app's own, not from the rulebook.
+ */
+function Rules({ onBack }) {
+  return html`<div className="rules-page">
+    <div className="rules-topbar">
+      <button className="rules-back" onClick=${onBack}>← Back</button>
+      <nav className="rules-nav">
+        <a href="#r-objective">Objective</a>
+        <a href="#r-setup">Setup</a>
+        <a href="#r-turn">Your Turn</a>
+        <a href="#r-build">Build &amp; Launch</a>
+        <a href="#r-cards">Card Reference</a>
+        <a href="#r-win">Winning</a>
+        <a href="#r-webapp">Using the Web App</a>
+      </nav>
+    </div>
+    <div className="rules-sheet">
+      <div className="rules-header">
+        <h1>How to Play</h1>
+        <div className="meta">Cows To The Mooooooooon! · 2–4 players · 10–30 minutes · ages 14+</div>
+      </div>
+      <div className="rules-card">
+        <p className="rules-story">
+          Many years in the future, the Great Council Of The United Bovine Species has given up on Earth and
+          decided the herd's future is on the moon. This is no jump over it — a cow has to actually land there and
+          build a colony. As a player, you and the bovines on your farm want to be the first to pull it off.
+        </p>
+
+        <section id="r-objective">
+          <h2>Objective</h2>
+          <p>Get your cows to the moon! To win, you must get all ten of your bovine friends to the moon before your opponents do.</p>
+        </section>
+
+        <section id="r-setup">
+          <h2>Setup</h2>
+          <ul>
+            <li>The moon sits in the center of the play area, next to the deck, discard pile, and rocket store.</li>
+            <li>Each player has a farm and a launch pad — the area where you'll build your rocket.</li>
+            <li>Each player starts with all ten of their cows on their farm, and a hand of five cards.</li>
+            <li>Four cards are dealt face-up next to the deck as the <strong>Rocket Store</strong>.</li>
+            <li>Whoever was on the moon most recently — or got the fewest cows there last game — goes first.</li>
+          </ul>
+        </section>
+
+        <section id="r-turn">
+          <h2>Your Turn</h2>
+          <p>Each turn has two phases: a Draw Phase, then an Action Phase.</p>
+          <h3>Draw Phase</h3>
+          <p>Draw two cards, in any combination, from the deck and/or the Rocket Store. If your hand is empty at the start of this phase, draw five from the deck instead. The Rocket Store isn't refilled until your turn ends.</p>
+          <h3>Action Phase</h3>
+          <p>Take three actions. Each one is any of:</p>
+          <ul>
+            <li><strong>Play a card</strong> — resolve its effect, then discard it. Rocket pieces stay in your launch area instead.</li>
+            <li><strong>Recycle</strong> — discard a card from your hand, then draw a new one.</li>
+            <li><strong>Herd</strong> — move one cow from your farm into your rocket.</li>
+            <li><strong>Nothing</strong> — your cows are feeling lazy. Always an option.</li>
+          </ul>
+          <p>At the end of your action phase, the Rocket Store refills back to four cards, and play passes left.</p>
+        </section>
+
+        <section id="r-build">
+          <h2>Building, Launching &amp; Getting to the Moon</h2>
+          <p>A rocket needs three pieces: a bottom, a middle, and a top. Playing a piece is one action — it goes onto your launch pad, starting a new rocket or completing your current one. You can only have one rocket on your pad at a time.</p>
+          <p>Build a rocket entirely from matching pieces and it holds one extra cow. A rocket can normally carry up to four.</p>
+          <p>Cows move from your farm into your rocket via the Herd action or the Super Speedy Cows card — they're buckled in and ready, until someone moves them back out.</p>
+          <p>To launch, you need a completed rocket and a Launch card. Launching sends every cow aboard straight to the moon; the rocket's pieces are discarded. A Launch card is its own category, not an Action Card — it can't be canceled by a Cownter.</p>
+          <div className="rules-example">
+            <p><strong>Example of play:</strong> Player 1 draws two cards from the Rocket Store, then plays Super Speedy Cows to rush three cows into their completed rocket — Player 2 Cownters it, canceling the move. Player 1 could Cownter right back but doesn't, and spends their last two actions herding two cows in by hand instead.</p>
+            <p>Player 2 takes their turn, herds a fourth cow into their own completed rocket, then plays Launch — sending all four cows to the moon. For their last action they weigh Bad Weather against a new rocket piece, and play the piece instead (Player 1 would almost certainly have countered the weather).</p>
+          </div>
+        </section>
+
+        <section id="r-cards">
+          <h2>Card Reference</h2>
+          <h3>Rocket Pieces</h3>
+          <div className="card-ref-grid">
+            <div className="card-ref">
+              <div className="kind">Rocket Piece</div>
+              <div className="name">Normal Piece</div>
+              <div className="text">Three types exist; a rocket built from all one type holds an extra cow.</div>
+            </div>
+            <div className="card-ref">
+              <div className="kind">Rocket Piece</div>
+              <div className="name">Wild Card</div>
+              <div className="text">Counts as any piece, no need to declare which. Doesn't count toward the matching-set bonus.</div>
+            </div>
+          </div>
+          <h3>Action Cards</h3>
+          <div className="card-ref-grid">
+            <div className="card-ref event">
+              <div className="kind">Event</div>
+              <div className="name">Mini Rocket</div>
+              <div className="text">Moves a cow from a farm or rocket straight onto the moon.</div>
+            </div>
+            <div className="card-ref event">
+              <div className="kind">Event</div>
+              <div className="name">Space Cowboy</div>
+              <div className="text">Takes a cow off the moon and returns it to its owner's farm.</div>
+            </div>
+            <div className="card-ref event">
+              <div className="kind">Event</div>
+              <div className="name">Cow Wrangler</div>
+              <div className="text">Returns every cow in a player's rocket back to their farm.</div>
+            </div>
+            <div className="card-ref event">
+              <div className="kind">Event</div>
+              <div className="name">Rocket Thief</div>
+              <div className="text">Takes any rocket piece in play and adds it to your hand.</div>
+            </div>
+            <div className="card-ref event">
+              <div className="kind">Event</div>
+              <div className="name">Bad Weather</div>
+              <div className="text">Nobody can launch a rocket until the start of your next turn.</div>
+            </div>
+            <div className="card-ref event">
+              <div className="kind">Event</div>
+              <div className="name">Wind</div>
+              <div className="text">Trade hands with any other player.</div>
+            </div>
+            <div className="card-ref event">
+              <div className="kind">Event</div>
+              <div className="name">Super Speedy Cows</div>
+              <div className="text">Moves cows into your rocket without spending an action on Herd.</div>
+            </div>
+          </div>
+          <h3>Cownter &amp; Launch</h3>
+          <div className="card-ref-grid">
+            <div className="card-ref cownter">
+              <div className="kind">Cownter</div>
+              <div className="name">Cownter</div>
+              <div className="text">Free to play — doesn't use an action. Cancels an event card's effect, played right after it.</div>
+            </div>
+            <div className="card-ref launch">
+              <div className="kind">Launch</div>
+              <div className="name">Launch</div>
+              <div className="text">Ignites a completed rocket and sends it to the moon. Not an Action Card — Cownters can't touch it.</div>
+            </div>
+          </div>
+        </section>
+
+        <section id="r-win">
+          <h2>Winning the Game</h2>
+          <p>Once a player has all ten of their cows on the moon, they win — immediately. The winner should help clean up. It's good sportsmanship.</p>
+        </section>
+
+        <section id="r-webapp">
+          <div className="webapp-section">
+            <h2>Using the Web App</h2>
+            <p>Everything above is the physical card game. This part is just about the app: getting into a game, and getting around the table once you're in one.</p>
+
+            <h3>Starting or joining a game</h3>
+            <ol className="webapp-steps">
+              <li><strong>Enter your name</strong> on the home screen. This is how other players will see you at the table.</li>
+              <li><strong>Create a game</strong> to start a new room — you'll get a short join code to send to your friends. Or <strong>enter a join code</strong> and press <strong>Join game</strong> to hop into one someone else made.</li>
+              <li>Everyone lands in the <strong>lobby</strong> first, where you can see who's joined. Whoever created the room can start it once enough players are in.</li>
+            </ol>
+
+            <h3>Getting around the table</h3>
+            <ol className="webapp-steps">
+              <li><strong>Drag the felt</strong> to spin the table and look around at everyone's area. <strong>Scroll or pinch</strong> to zoom — click your own launch pad or the shared pile in the middle first to pick what you're zooming toward.</li>
+              <li><strong>Click a card in your hand</strong> to see it up close, with a play button if it's your turn. <strong>Drag a card upward</strong> to play it directly, or <strong>drag it sideways</strong> to reorder your hand.</li>
+              <li><strong>Click your farm</strong> to herd a cow into your rocket. <strong>Click a highlighted zone</strong> — a farm, a rocket, a piece, or another player's hand — when a card asks you to target something.</li>
+              <li>Rocket pieces and cow tokens can be <strong>dragged around for fun</strong> to arrange your rocket visually — purely cosmetic, it never changes what the game actually tracks.</li>
+            </ol>
+
+            <h3>Taking your turn</h3>
+            <ol className="webapp-steps">
+              <li>You'll draw first, then get three actions — buttons for whatever's legal light up as you go. Press <strong>Do nothing</strong> to skip an action, or <strong>End turn</strong> once you're finished, even with actions left.</li>
+              <li>If you play a card someone can respond to, everyone gets a short window to play a <strong>Cownter</strong> before it resolves — the app will prompt you when it's your move.</li>
+            </ol>
+
+            <div className="webapp-note">
+              <strong>Stuck mid-game?</strong> Tap the <strong>?</strong> in the corner of the table any time — it opens this same page without leaving your seat. Lost your connection or closed the tab? Come back to the home screen and look for a <strong>Rejoin</strong> button, or just re-enter the room code under your original name.
+            </div>
+          </div>
+        </section>
+
+        <p className="rules-footnote">This is meant to be a fun, friendly game — house rules are always fair game.</p>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -565,7 +767,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // so to hit a target scale (zoom) we push the camera to d = P(1 - 1/zoom).
 const zoomToZ = (zoom) => CAMERA_DIST * (1 - 1 / zoom);
 
-function Game({ state, deadline }) {
+function Game({ state, deadline, onShowRules }) {
   // Hooks first (before any early return) so hook order is stable.
   const [confirm, setConfirm] = useState(null); // { card, message, blocking }
   const [zone, setZone] = useState(null); // zone-select card (click a spot on the table)
@@ -601,6 +803,7 @@ function Game({ state, deadline }) {
   const onSelfTarget = () => zonePick({ targetPlayerId: you.id });
 
   return html`<div className="game">
+    <button className="help-fab" aria-label="How to play" onClick=${onShowRules}>?</button>
     ${winner &&
     html`<div className="overlay">
       <div className="modal">

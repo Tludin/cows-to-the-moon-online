@@ -46,6 +46,16 @@ older "Phase 4/5 — Tabletop UI & Art" section, which still covers
 component-level behavior). Remaining Phase 5: audio, real animations for
 launch/landing, real-time Cownter mode.
 
+**A full Rules / "How to Play" page landed 2026-09-11** — a new `Rules`
+component (`app.js`) reached via a "How to play" link on `Home` and a
+floating "?" during a game (`Game`), both toggling one client-only
+`showRules` boolean in `App()` (never touches the server). Full-screen,
+independently scrolling, real rulebook content (adapted from
+`../Cows_To_the_Moon_Rules_Revised__Edited_.pdf`) plus an app-specific
+"Using the Web App" section. See `../CLAUDE.md`'s dedicated section for
+the z-index layering, the `.help-fab` corner-picking rationale, and the
+mockup rounds that led to it.
+
 Client gotcha (htm + React, no build): use `className` not `class`, and pass
 `style` an object not a string — both break only at render time, which
 `node --check` won't catch.
